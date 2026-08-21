@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 TARGET_FPS = 30
 CAMERA_DEVICE_INDEX = 0
 BUTTON_HEIGHT = 50
+JAPANESE_FONT_PATH = (
+    "/home/anekos/.nix-profile/share/fonts/truetype/migu/migu-1m-regular.ttf"
+)
 
 
 class OcrApp(App):
@@ -24,7 +27,12 @@ class OcrApp(App):
 
     def build(self) -> BoxLayout:
         self.image_widget = Image()
-        self.ocr_button = Button(text="OCR実行", size_hint_y=None, height=BUTTON_HEIGHT)
+        self.ocr_button = Button(
+            text="OCR実行",
+            size_hint_y=None,
+            height=BUTTON_HEIGHT,
+            font_name=JAPANESE_FONT_PATH,
+        )
         self.ocr_button.bind(on_press=self._on_ocr_button_press)
 
         layout = BoxLayout(orientation="vertical")
