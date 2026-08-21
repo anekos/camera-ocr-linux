@@ -116,6 +116,9 @@ class OcrApp(App):
         self.flip_checkbox, flip_label = self._build_labeled_checkbox(
             "反転", active=False
         )
+        self.raw_order_checkbox, raw_order_label = self._build_labeled_checkbox(
+            "そのまま出力", active=False
+        )
 
         self.ocr_button = Button(
             text="OCR実行", font_name=JAPANESE_FONT_PATH, font_size=FONT_SIZE
@@ -153,6 +156,8 @@ class OcrApp(App):
         toggle_row.add_widget(copy_label)
         toggle_row.add_widget(self.flip_checkbox)
         toggle_row.add_widget(flip_label)
+        toggle_row.add_widget(self.raw_order_checkbox)
+        toggle_row.add_widget(raw_order_label)
         toggle_row.add_widget(self.page_number_label)
         toggle_row.add_widget(self.resolution_label)
 
@@ -205,15 +210,18 @@ class OcrApp(App):
             return
 
         frame = self.last_frame.copy()
+        sort_output = not self.raw_order_checkbox.active
         self.ocr_button.disabled = True
-        threading.Thread(target=self._run_ocr, args=(frame,), daemon=True).start()
+        threading.Thread(
+            target=self._run_ocr, args=(frame, sort_output), daemon=True
+        ).start()
 
-    def _run_ocr(self, frame: np.ndarray) -> None:
+    def _run_ocr(self, frame: np.ndarray, sort_output: bool) -> None:
         try:
             img = bgr_frame_to_rgb_array(frame)
             analyzed, _ocr_vis, _layout_vis = self.analyzer(img)
             print(analyzed.model_dump_json(), flush=True)
-            text = extract_recognized_text(analyzed)
+            text = extract_recognized_text(analyzed, sort=sort_output)
             image_height, image_width = img.shape[:2]
             page_number = extract_page_number(analyzed, image_width, image_height)
             Clock.schedule_once(lambda dt: self._apply_ocr_result(text, page_number))
