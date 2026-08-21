@@ -23,6 +23,8 @@ from ocr_app.camera import (
     Camera,
     bgr_frame_to_rgb_array,
     bgr_frame_to_rgb_bytes,
+    flip_horizontal,
+    flip_vertical,
     save_frame_as_png,
 )
 from ocr_app.ocr_result import extract_page_number, extract_recognized_text
@@ -98,6 +100,19 @@ class OcrApp(App):
             texture_size=lambda instance, value: setattr(instance, "width", value[0])
         )
 
+        self.flip_checkbox = CheckBox(
+            active=False, size_hint_x=None, width=CONTROL_ROW_HEIGHT
+        )
+        flip_label = Label(
+            text="反転",
+            font_name=JAPANESE_FONT_PATH,
+            font_size=FONT_SIZE,
+            size_hint_x=None,
+        )
+        flip_label.bind(
+            texture_size=lambda instance, value: setattr(instance, "width", value[0])
+        )
+
         self.ocr_button = Button(
             text="OCR実行", font_name=JAPANESE_FONT_PATH, font_size=FONT_SIZE
         )
@@ -132,6 +147,8 @@ class OcrApp(App):
         )
         control_row.add_widget(self.copy_checkbox)
         control_row.add_widget(copy_label)
+        control_row.add_widget(self.flip_checkbox)
+        control_row.add_widget(flip_label)
         control_row.add_widget(self.ocr_button)
         control_row.add_widget(self.save_button)
         control_row.add_widget(self.page_number_label)
@@ -152,6 +169,10 @@ class OcrApp(App):
         if frame is None:
             logger.warning("Failed to read frame from camera; keeping last frame")
             return
+
+        if self.flip_checkbox.active:
+            frame = flip_vertical(frame)
+            frame = flip_horizontal(frame)
 
         self.last_frame = frame
 
