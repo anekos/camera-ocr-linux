@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import TracebackType
 from typing import Self
 
@@ -23,6 +24,13 @@ def bgr_frame_to_rgb_bytes(frame: np.ndarray) -> bytes:
     flipped = cv2.flip(frame, 0)
     rgb = cv2.cvtColor(flipped, cv2.COLOR_BGR2RGB)
     return rgb.tobytes()
+
+
+def save_frame_as_png(frame: np.ndarray, output_dir: Path, timestamp: str) -> Path:
+    """フレームをPNGとして output_dir に保存し、保存先のパスを返す。"""
+    output_path = output_dir / f"ocr-app-capture-{timestamp}.png"
+    cv2.imwrite(str(output_path), frame)
+    return output_path
 
 
 DEFAULT_CAPTURE_WIDTH = 3840

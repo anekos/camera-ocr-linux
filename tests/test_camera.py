@@ -1,8 +1,14 @@
+from pathlib import Path
+
 import cv2
 import numpy as np
 import pytest
 
-from ocr_app.camera import bgr_frame_to_rgb_array, bgr_frame_to_rgb_bytes
+from ocr_app.camera import (
+    bgr_frame_to_rgb_array,
+    bgr_frame_to_rgb_bytes,
+    save_frame_as_png,
+)
 
 
 def test_bgr_frame_to_rgb_array_converts_color_order_without_flipping() -> None:
@@ -48,6 +54,19 @@ def test_bgr_frame_to_rgb_bytes_converts_color_order_and_flips_vertically() -> N
     # 上下反転により、元の行1（緑）が先頭、元の行0（青）が末尾になる。
     expected = bytes([0, 255, 0]) + bytes([0, 0, 255])
     assert result == expected
+
+
+def test_save_frame_as_png_writes_readable_image_at_expected_path(
+    tmp_path: Path,
+) -> None:
+    frame = np.zeros((2, 3, 3), dtype=np.uint8)
+
+    output_path = save_frame_as_png(frame, tmp_path, "20260101-120000")
+
+    assert output_path == tmp_path / "ocr-app-capture-20260101-120000.png"
+    saved = cv2.imread(str(output_path))
+    assert saved is not None
+    assert saved.shape == frame.shape
 
 
 class _FakeVideoCapture:
