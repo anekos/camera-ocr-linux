@@ -8,7 +8,11 @@ version = "0.1.0"
 description = "Desktop OCR App For Linux"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "kivy>=2.3.1",
+    "numpy>=2.5.2",
+    "opencv-python>=5.0.0.93",
+]
 
 [project.scripts]
 ocr-app = "ocr_app.main:main"
@@ -27,3 +31,7 @@ dev = [
 [tool.mypy]
 mypy_path = "src"
 explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["kivy.*"]
+ignore_missing_imports = true
