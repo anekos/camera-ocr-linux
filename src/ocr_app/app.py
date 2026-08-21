@@ -48,9 +48,11 @@ class OcrApp(App):
             size_hint_y=None,
         )
 
-        result_scroll = ScrollView(
-            bar_width=SCROLLBAR_WIDTH, scroll_type=["bars", "content"]
-        )
+        # scroll_typeに"content"を含めると、テキストエリア上のドラッグ操作が
+        # 常にスクロール判定に取られ、TextInputのドラッグによる範囲選択が
+        # 効かなくなる。"bars"のみにすることで、スクロールバー以外への
+        # タッチはTextInputへそのまま渡され、選択操作が機能する。
+        result_scroll = ScrollView(bar_width=SCROLLBAR_WIDTH, scroll_type=["bars"])
         result_scroll.add_widget(self.result_text_input)
 
         def _fit_result_text_height(*_args: object) -> None:
