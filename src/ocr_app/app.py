@@ -143,25 +143,33 @@ class OcrApp(App):
             width=PAGE_NUMBER_LABEL_WIDTH,
         )
 
-        control_row = BoxLayout(
+        toggle_row = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
             height=CONTROL_ROW_HEIGHT,
             spacing=CONTROL_ROW_SPACING,
         )
-        control_row.add_widget(self.copy_checkbox)
-        control_row.add_widget(copy_label)
-        control_row.add_widget(self.flip_checkbox)
-        control_row.add_widget(flip_label)
-        control_row.add_widget(self.ocr_button)
-        control_row.add_widget(self.save_button)
-        control_row.add_widget(self.page_number_label)
-        control_row.add_widget(self.resolution_label)
+        toggle_row.add_widget(self.copy_checkbox)
+        toggle_row.add_widget(copy_label)
+        toggle_row.add_widget(self.flip_checkbox)
+        toggle_row.add_widget(flip_label)
+        toggle_row.add_widget(self.page_number_label)
+        toggle_row.add_widget(self.resolution_label)
+
+        button_row = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=CONTROL_ROW_HEIGHT,
+            spacing=CONTROL_ROW_SPACING,
+        )
+        button_row.add_widget(self.ocr_button)
+        button_row.add_widget(self.save_button)
 
         layout = BoxLayout(orientation="vertical")
         layout.add_widget(self.image_widget)
         layout.add_widget(result_splitter)
-        layout.add_widget(control_row)
+        layout.add_widget(toggle_row)
+        layout.add_widget(button_row)
 
         self.camera = Camera(device_index=CAMERA_DEVICE_INDEX)
         self.analyzer = DocumentAnalyzer(device="cuda")
