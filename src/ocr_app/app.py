@@ -11,6 +11,7 @@ from kivy.uix.button import Button
 from kivy.uix.checkbox import CheckBox
 from kivy.uix.image import Image
 from kivy.uix.label import Label
+from kivy.uix.scrollview import ScrollView
 from kivy.uix.splitter import Splitter
 from kivy.uix.textinput import TextInput
 from yomitoku import DocumentAnalyzer
@@ -28,6 +29,7 @@ RESULT_TEXT_MIN_HEIGHT = 60
 RESULT_TEXT_MAX_HEIGHT = 600
 RESOLUTION_LABEL_WIDTH = 120
 FONT_SIZE = 24
+SCROLLBAR_WIDTH = 12
 JAPANESE_FONT_PATH = (
     "/home/anekos/.nix-profile/share/fonts/truetype/migu/migu-1m-regular.ttf"
 )
@@ -43,7 +45,22 @@ class OcrApp(App):
             readonly=True,
             font_name=JAPANESE_FONT_PATH,
             font_size=FONT_SIZE,
+            size_hint_y=None,
         )
+
+        result_scroll = ScrollView(
+            bar_width=SCROLLBAR_WIDTH, scroll_type=["bars", "content"]
+        )
+        result_scroll.add_widget(self.result_text_input)
+
+        def _fit_result_text_height(*_args: object) -> None:
+            self.result_text_input.height = max(
+                self.result_text_input.minimum_height, result_scroll.height
+            )
+
+        self.result_text_input.bind(minimum_height=_fit_result_text_height)
+        result_scroll.bind(height=_fit_result_text_height)
+
         result_splitter = Splitter(
             sizable_from="top",
             size_hint=(1, None),
@@ -51,7 +68,7 @@ class OcrApp(App):
             min_size=RESULT_TEXT_MIN_HEIGHT,
             max_size=RESULT_TEXT_MAX_HEIGHT,
         )
-        result_splitter.add_widget(self.result_text_input)
+        result_splitter.add_widget(result_scroll)
 
         self.copy_checkbox = CheckBox(
             active=True, size_hint_x=None, width=CONTROL_ROW_HEIGHT
