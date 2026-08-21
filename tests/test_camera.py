@@ -7,6 +7,7 @@ import pytest
 from ocr_app.camera import (
     bgr_frame_to_rgb_array,
     bgr_frame_to_rgb_bytes,
+    flip_vertical,
     save_frame_as_png,
 )
 
@@ -54,6 +55,28 @@ def test_bgr_frame_to_rgb_bytes_converts_color_order_and_flips_vertically() -> N
     # 上下反転により、元の行1（緑）が先頭、元の行0（青）が末尾になる。
     expected = bytes([0, 255, 0]) + bytes([0, 0, 255])
     assert result == expected
+
+
+def test_flip_vertical_reverses_row_order() -> None:
+    # 2x1画像（height=2, width=1）。上下反転で行0と行1が入れ替わる。
+    frame = np.array(
+        [
+            [[255, 0, 0]],
+            [[0, 255, 0]],
+        ],
+        dtype=np.uint8,
+    )
+
+    result = flip_vertical(frame)
+
+    expected = np.array(
+        [
+            [[0, 255, 0]],
+            [[255, 0, 0]],
+        ],
+        dtype=np.uint8,
+    )
+    np.testing.assert_array_equal(result, expected)
 
 
 def test_save_frame_as_png_writes_readable_image_at_expected_path(

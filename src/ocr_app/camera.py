@@ -26,6 +26,11 @@ def bgr_frame_to_rgb_bytes(frame: np.ndarray) -> bytes:
     return rgb.tobytes()
 
 
+def flip_vertical(frame: np.ndarray) -> np.ndarray:
+    """フレームを上下反転する（カメラが上下逆さに取り付けられている場合の補正用）。"""
+    return cv2.flip(frame, 0)
+
+
 def save_frame_as_png(frame: np.ndarray, output_dir: Path, timestamp: str) -> Path:
     """フレームをPNGとして output_dir に保存し、保存先のパスを返す。"""
     output_path = output_dir / f"ocr-app-capture-{timestamp}.png"
