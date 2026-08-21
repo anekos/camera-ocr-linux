@@ -31,6 +31,11 @@ def flip_vertical(frame: np.ndarray) -> np.ndarray:
     return cv2.flip(frame, 0)
 
 
+def flip_horizontal(frame: np.ndarray) -> np.ndarray:
+    """フレームを左右反転する（カメラの取り付け向きの補正用）。"""
+    return cv2.flip(frame, 1)
+
+
 def save_frame_as_png(frame: np.ndarray, output_dir: Path, timestamp: str) -> Path:
     """フレームをPNGとして output_dir に保存し、保存先のパスを返す。"""
     output_path = output_dir / f"ocr-app-capture-{timestamp}.png"

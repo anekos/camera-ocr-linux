@@ -7,6 +7,7 @@ import pytest
 from ocr_app.camera import (
     bgr_frame_to_rgb_array,
     bgr_frame_to_rgb_bytes,
+    flip_horizontal,
     flip_vertical,
     save_frame_as_png,
 )
@@ -73,6 +74,26 @@ def test_flip_vertical_reverses_row_order() -> None:
         [
             [[0, 255, 0]],
             [[255, 0, 0]],
+        ],
+        dtype=np.uint8,
+    )
+    np.testing.assert_array_equal(result, expected)
+
+
+def test_flip_horizontal_reverses_column_order() -> None:
+    # 1x2画像（height=1, width=2）。左右反転で列0と列1が入れ替わる。
+    frame = np.array(
+        [
+            [[255, 0, 0], [0, 255, 0]],
+        ],
+        dtype=np.uint8,
+    )
+
+    result = flip_horizontal(frame)
+
+    expected = np.array(
+        [
+            [[0, 255, 0], [255, 0, 0]],
         ],
         dtype=np.uint8,
     )
