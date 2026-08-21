@@ -1,5 +1,8 @@
 import logging
+import tempfile
 import threading
+from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 from kivy.app import App
@@ -16,7 +19,12 @@ from kivy.uix.splitter import Splitter
 from kivy.uix.textinput import TextInput
 from yomitoku import DocumentAnalyzer
 
-from ocr_app.camera import Camera, bgr_frame_to_rgb_array, bgr_frame_to_rgb_bytes
+from ocr_app.camera import (
+    Camera,
+    bgr_frame_to_rgb_array,
+    bgr_frame_to_rgb_bytes,
+    save_frame_as_png,
+)
 from ocr_app.ocr_result import extract_page_number, extract_recognized_text
 
 logger = logging.getLogger(__name__)
@@ -95,6 +103,11 @@ class OcrApp(App):
         )
         self.ocr_button.bind(on_press=self._on_ocr_button_press)
 
+        self.save_button = Button(
+            text="画像を保存", font_name=JAPANESE_FONT_PATH, font_size=FONT_SIZE
+        )
+        self.save_button.bind(on_press=self._on_save_button_press)
+
         self.resolution_label = Label(
             text="",
             font_name=JAPANESE_FONT_PATH,
@@ -120,6 +133,7 @@ class OcrApp(App):
         control_row.add_widget(self.copy_checkbox)
         control_row.add_widget(copy_label)
         control_row.add_widget(self.ocr_button)
+        control_row.add_widget(self.save_button)
         control_row.add_widget(self.page_number_label)
         control_row.add_widget(self.resolution_label)
 
@@ -180,6 +194,17 @@ class OcrApp(App):
         )
         if self.copy_checkbox.active:
             Clipboard.copy(text)
+
+    def _on_save_button_press(self, instance: Button) -> None:
+        if self.last_frame is None:
+            logger.warning("No frame available yet; skipping save")
+            return
+
+        timestamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f")
+        output_path = save_frame_as_png(
+            self.last_frame, Path(tempfile.gettempdir()), timestamp
+        )
+        Clipboard.copy(str(output_path))
 
     def _on_result_selection_text_changed(
         self, instance: TextInput, value: str
