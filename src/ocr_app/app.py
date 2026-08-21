@@ -11,6 +11,7 @@ from kivy.uix.button import Button
 from kivy.uix.checkbox import CheckBox
 from kivy.uix.image import Image
 from kivy.uix.label import Label
+from kivy.uix.splitter import Splitter
 from kivy.uix.textinput import TextInput
 from yomitoku import DocumentAnalyzer
 
@@ -21,10 +22,12 @@ logger = logging.getLogger(__name__)
 
 TARGET_FPS = 30
 CAMERA_DEVICE_INDEX = 0
-CONTROL_ROW_HEIGHT = 50
+CONTROL_ROW_HEIGHT = 60
 RESULT_TEXT_HEIGHT = 150
-COPY_LABEL_WIDTH = 200
+RESULT_TEXT_MIN_HEIGHT = 60
+RESULT_TEXT_MAX_HEIGHT = 600
 RESOLUTION_LABEL_WIDTH = 120
+FONT_SIZE = 24
 JAPANESE_FONT_PATH = (
     "/home/anekos/.nix-profile/share/fonts/truetype/migu/migu-1m-regular.ttf"
 )
@@ -39,9 +42,16 @@ class OcrApp(App):
         self.result_text_input = TextInput(
             readonly=True,
             font_name=JAPANESE_FONT_PATH,
-            size_hint_y=None,
-            height=RESULT_TEXT_HEIGHT,
+            font_size=FONT_SIZE,
         )
+        result_splitter = Splitter(
+            sizable_from="top",
+            size_hint=(1, None),
+            height=RESULT_TEXT_HEIGHT,
+            min_size=RESULT_TEXT_MIN_HEIGHT,
+            max_size=RESULT_TEXT_MAX_HEIGHT,
+        )
+        result_splitter.add_widget(self.result_text_input)
 
         self.copy_checkbox = CheckBox(
             active=True, size_hint_x=None, width=CONTROL_ROW_HEIGHT
@@ -49,16 +59,22 @@ class OcrApp(App):
         copy_label = Label(
             text="クリップボードにコピー",
             font_name=JAPANESE_FONT_PATH,
+            font_size=FONT_SIZE,
             size_hint_x=None,
-            width=COPY_LABEL_WIDTH,
+        )
+        copy_label.bind(
+            texture_size=lambda instance, value: setattr(instance, "width", value[0])
         )
 
-        self.ocr_button = Button(text="OCR実行", font_name=JAPANESE_FONT_PATH)
+        self.ocr_button = Button(
+            text="OCR実行", font_name=JAPANESE_FONT_PATH, font_size=FONT_SIZE
+        )
         self.ocr_button.bind(on_press=self._on_ocr_button_press)
 
         self.resolution_label = Label(
             text="",
             font_name=JAPANESE_FONT_PATH,
+            font_size=FONT_SIZE,
             size_hint_x=None,
             width=RESOLUTION_LABEL_WIDTH,
         )
@@ -73,7 +89,7 @@ class OcrApp(App):
 
         layout = BoxLayout(orientation="vertical")
         layout.add_widget(self.image_widget)
-        layout.add_widget(self.result_text_input)
+        layout.add_widget(result_splitter)
         layout.add_widget(control_row)
 
         self.camera = Camera(device_index=CAMERA_DEVICE_INDEX)
