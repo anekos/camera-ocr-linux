@@ -5,6 +5,15 @@ import cv2
 import numpy as np
 
 
+def bgr_frame_to_rgb_array(frame: np.ndarray) -> np.ndarray:
+    """OpenCVのBGRフレームをRGBのnumpy配列に変換する（上下反転なし）。
+
+    OCR (yomitoku) はKivyのTextureと異なり画像の上下反転を必要としないため、
+    色順の変換のみを行う。
+    """
+    return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+
 def bgr_frame_to_rgb_bytes(frame: np.ndarray) -> bytes:
     """OpenCVのBGRフレームをKivy Texture用のRGBバイト列に変換する。
 

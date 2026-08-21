@@ -1,7 +1,33 @@
 import numpy as np
 import pytest
 
-from ocr_app.camera import bgr_frame_to_rgb_bytes
+from ocr_app.camera import bgr_frame_to_rgb_array, bgr_frame_to_rgb_bytes
+
+
+def test_bgr_frame_to_rgb_array_converts_color_order_without_flipping() -> None:
+    # 2x2画像、BGRチャンネル順。4隅を異なる色にして、行・列の入れ替わりも検出できるようにする。
+    # (0,0): 青 (255,0,0)BGR -> (0,0,255)RGB
+    # (0,1): 緑 (0,255,0)BGR -> (0,255,0)RGB
+    # (1,0): 赤 (0,0,255)BGR -> (255,0,0)RGB
+    # (1,1): 白 (255,255,255)BGR -> (255,255,255)RGB
+    frame = np.array(
+        [
+            [[255, 0, 0], [0, 255, 0]],
+            [[0, 0, 255], [255, 255, 255]],
+        ],
+        dtype=np.uint8,
+    )
+
+    result = bgr_frame_to_rgb_array(frame)
+
+    expected = np.array(
+        [
+            [[0, 0, 255], [0, 255, 0]],
+            [[255, 0, 0], [255, 255, 255]],
+        ],
+        dtype=np.uint8,
+    )
+    np.testing.assert_array_equal(result, expected)
 
 
 def test_bgr_frame_to_rgb_bytes_converts_color_order_and_flips_vertically() -> None:
