@@ -167,7 +167,8 @@ class OcrApp(App):
             analyzed, _ocr_vis, _layout_vis = self.analyzer(img)
             print(analyzed.model_dump_json(), flush=True)
             text = extract_recognized_text(analyzed)
-            page_number = extract_page_number(analyzed)
+            image_height, image_width = img.shape[:2]
+            page_number = extract_page_number(analyzed, image_width, image_height)
             Clock.schedule_once(lambda dt: self._apply_ocr_result(text, page_number))
         finally:
             Clock.schedule_once(lambda dt: setattr(self.ocr_button, "disabled", False))

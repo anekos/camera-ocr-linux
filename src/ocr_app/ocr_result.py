@@ -38,14 +38,38 @@ def _parse_page_number(text: str) -> int | None:
     return None
 
 
-def extract_page_number(analyzed: DocumentAnalyzerSchema) -> int | None:
+def _distance_from_image_center(
+    box: list[int], image_width: int, image_height: int
+) -> float:
+    left, top, right, bottom = box
+    box_center_x = (left + right) / 2
+    box_center_y = (top + bottom) / 2
+    return (
+        (box_center_x - image_width / 2) ** 2 + (box_center_y - image_height / 2) ** 2
+    ) ** 0.5
+
+
+def extract_page_number(
+    analyzed: DocumentAnalyzerSchema, image_width: int, image_height: int
+) -> int | None:
     """ページヘッダー・フッターの段落からページ番号らしき数値を探す。
 
-    order順に見て、最初に数字列が見つかった段落の値を返す。
+    ページ番号は綴じ側(中央寄り)より余白側(外側)に印字されることが多いため、
+    複数の候補があれば画像中心からの距離が最大のもの、つまり最も外側にある
+    ものを採用する。
     """
+    candidates: list[tuple[float, int]] = []
     for paragraph in _collect_paragraphs(analyzed):
         if paragraph.role not in PAGE_NUMBER_ROLES or paragraph.contents is None:
             continue
-        if (page_number := _parse_page_number(paragraph.contents)) is not None:
-            return page_number
-    return None
+        page_number = _parse_page_number(paragraph.contents)
+        if page_number is None:
+            continue
+        distance = _distance_from_image_center(paragraph.box, image_width, image_height)
+        candidates.append((distance, page_number))
+
+    if not candidates:
+        return None
+
+    _distance, page_number = max(candidates, key=lambda candidate: candidate[0])
+    return page_number

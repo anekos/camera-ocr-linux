@@ -8,10 +8,17 @@ from ocr_app.ocr_result import extract_page_number, extract_recognized_text
 
 
 def _paragraph(
-    contents: str | None, order: int | None, role: str | None = None
+    contents: str | None,
+    order: int | None,
+    role: str | None = None,
+    box: list[int] | None = None,
 ) -> ParagraphSchema:
     return ParagraphSchema(
-        box=[0, 0, 0, 0], contents=contents, direction=None, order=order, role=role
+        box=box or [0, 0, 0, 0],
+        contents=contents,
+        direction=None,
+        order=order,
+        role=role,
     )
 
 
@@ -87,7 +94,7 @@ def test_extract_page_number_finds_leading_digits_in_footer() -> None:
         figures=[],
     )
 
-    assert extract_page_number(document) == 12
+    assert extract_page_number(document, image_width=100, image_height=100) == 12
 
 
 def test_extract_page_number_finds_trailing_digits_in_header() -> None:
@@ -98,7 +105,7 @@ def test_extract_page_number_finds_trailing_digits_in_header() -> None:
         figures=[],
     )
 
-    assert extract_page_number(document) == 34
+    assert extract_page_number(document, image_width=100, image_height=100) == 34
 
 
 def test_extract_page_number_returns_none_when_no_header_or_footer() -> None:
@@ -107,7 +114,7 @@ def test_extract_page_number_returns_none_when_no_header_or_footer() -> None:
         figures=[],
     )
 
-    assert extract_page_number(document) is None
+    assert extract_page_number(document, image_width=100, image_height=100) is None
 
 
 def test_extract_page_number_returns_none_when_no_digits_found() -> None:
@@ -116,4 +123,32 @@ def test_extract_page_number_returns_none_when_no_digits_found() -> None:
         figures=[],
     )
 
-    assert extract_page_number(document) is None
+    assert extract_page_number(document, image_width=100, image_height=100) is None
+
+
+def test_extract_page_number_prefers_candidate_farthest_from_image_center() -> None:
+    document = _document(
+        paragraphs=[
+            # box中心(495,495)は画像中心(500,500)にほぼ近い
+            _paragraph("1", order=0, role="page_footer", box=[490, 490, 500, 500]),
+            # box中心(10,10)は画像中心から遠い(外側の角に近い)
+            _paragraph("2", order=1, role="page_footer", box=[0, 0, 20, 20]),
+        ],
+        figures=[],
+    )
+
+    assert extract_page_number(document, image_width=1000, image_height=1000) == 2
+
+
+def test_extract_page_number_compares_header_and_footer_candidates_together() -> None:
+    document = _document(
+        paragraphs=[
+            # box中心(500,500)は画像中心と一致(内側)
+            _paragraph("1", order=0, role="page_header", box=[490, 490, 510, 510]),
+            # box中心(10,10)は画像の角に近い(外側)
+            _paragraph("2", order=1, role="page_footer", box=[0, 0, 20, 20]),
+        ],
+        figures=[],
+    )
+
+    assert extract_page_number(document, image_width=1000, image_height=1000) == 2
