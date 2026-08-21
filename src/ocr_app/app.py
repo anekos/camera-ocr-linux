@@ -23,6 +23,8 @@ TARGET_FPS = 30
 CAMERA_DEVICE_INDEX = 0
 CONTROL_ROW_HEIGHT = 50
 RESULT_TEXT_HEIGHT = 150
+COPY_LABEL_WIDTH = 200
+RESOLUTION_LABEL_WIDTH = 120
 JAPANESE_FONT_PATH = (
     "/home/anekos/.nix-profile/share/fonts/truetype/migu/migu-1m-regular.ttf"
 )
@@ -44,15 +46,22 @@ class OcrApp(App):
         self.copy_checkbox = CheckBox(
             active=True, size_hint_x=None, width=CONTROL_ROW_HEIGHT
         )
-        copy_label = Label(text="クリップボードにコピー", font_name=JAPANESE_FONT_PATH)
-
-        self.ocr_button = Button(
-            text="OCR実行",
-            size_hint_x=None,
-            width=CONTROL_ROW_HEIGHT * 2,
+        copy_label = Label(
+            text="クリップボードにコピー",
             font_name=JAPANESE_FONT_PATH,
+            size_hint_x=None,
+            width=COPY_LABEL_WIDTH,
         )
+
+        self.ocr_button = Button(text="OCR実行", font_name=JAPANESE_FONT_PATH)
         self.ocr_button.bind(on_press=self._on_ocr_button_press)
+
+        self.resolution_label = Label(
+            text="",
+            font_name=JAPANESE_FONT_PATH,
+            size_hint_x=None,
+            width=RESOLUTION_LABEL_WIDTH,
+        )
 
         control_row = BoxLayout(
             orientation="horizontal", size_hint_y=None, height=CONTROL_ROW_HEIGHT
@@ -60,6 +69,7 @@ class OcrApp(App):
         control_row.add_widget(self.copy_checkbox)
         control_row.add_widget(copy_label)
         control_row.add_widget(self.ocr_button)
+        control_row.add_widget(self.resolution_label)
 
         layout = BoxLayout(orientation="vertical")
         layout.add_widget(self.image_widget)
@@ -80,6 +90,8 @@ class OcrApp(App):
         self.last_frame = frame
 
         height, width = frame.shape[:2]
+        self.resolution_label.text = f"{width}x{height}"
+
         texture = Texture.create(size=(width, height), colorfmt="rgb")
         texture.blit_buffer(
             bgr_frame_to_rgb_bytes(frame),
