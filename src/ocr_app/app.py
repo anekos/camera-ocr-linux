@@ -29,6 +29,7 @@ from ocr_app.camera import (
     save_frame_as_png,
 )
 from ocr_app.ocr_result import extract_page_number, extract_recognized_text
+from ocr_app.settings import load_settings, save_settings
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ SCROLLBAR_WIDTH = 12
 JAPANESE_FONT_PATH = (
     "/home/anekos/.nix-profile/share/fonts/truetype/migu/migu-1m-regular.ttf"
 )
+SETTINGS_PATH = Path.home() / ".config" / "ocr-app" / "settings.json"
 
 
 class ClickableLabel(ButtonBehavior, Label):
@@ -110,15 +112,22 @@ class OcrApp(App):
         )
         result_splitter.add_widget(result_scroll)
 
+        settings = load_settings(SETTINGS_PATH)
         self.copy_checkbox, copy_label = self._build_labeled_checkbox(
-            "クリップボードにコピー", active=True
+            "クリップボードにコピー", active=settings.get("copy_to_clipboard", True)
         )
         self.flip_checkbox, flip_label = self._build_labeled_checkbox(
-            "反転", active=False
+            "反転", active=settings.get("flip", False)
         )
         self.raw_order_checkbox, raw_order_label = self._build_labeled_checkbox(
-            "そのまま出力", active=False
+            "そのまま出力", active=settings.get("raw_order", False)
         )
+        for checkbox in (
+            self.copy_checkbox,
+            self.flip_checkbox,
+            self.raw_order_checkbox,
+        ):
+            checkbox.bind(active=lambda instance, value: self._save_settings())
 
         self.ocr_button = Button(
             text="OCR実行", font_name=JAPANESE_FONT_PATH, font_size=FONT_SIZE
@@ -246,6 +255,16 @@ class OcrApp(App):
             self.last_frame, Path(tempfile.gettempdir()), timestamp
         )
         Clipboard.copy(str(output_path))
+
+    def _save_settings(self) -> None:
+        save_settings(
+            SETTINGS_PATH,
+            {
+                "copy_to_clipboard": self.copy_checkbox.active,
+                "flip": self.flip_checkbox.active,
+                "raw_order": self.raw_order_checkbox.active,
+            },
+        )
 
     def _on_result_selection_text_changed(
         self, instance: TextInput, value: str
