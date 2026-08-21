@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import pytest
 
@@ -58,6 +59,7 @@ class _FakeVideoCapture:
         self._opened = opened
         self._read_result = read_result
         self.released = False
+        self.set_calls: list[tuple[int, float]] = []
 
     def isOpened(self) -> bool:
         return self._opened
@@ -67,6 +69,10 @@ class _FakeVideoCapture:
 
     def release(self) -> None:
         self.released = True
+
+    def set(self, prop_id: int, value: float) -> bool:
+        self.set_calls.append((prop_id, value))
+        return True
 
 
 def test_camera_raises_when_device_cannot_be_opened(
@@ -112,6 +118,23 @@ def test_camera_read_frame_returns_frame_on_success(
     camera = Camera(device_index=0)
 
     assert camera.read_frame() is frame
+
+
+def test_camera_requests_mjpg_and_capture_resolution_on_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ocr_app.camera import Camera
+
+    fake = _FakeVideoCapture(opened=True)
+    monkeypatch.setattr("ocr_app.camera.cv2.VideoCapture", lambda index: fake)
+
+    Camera(device_index=0, width=3840, height=2160)
+
+    assert fake.set_calls == [
+        (cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc(*"MJPG")),
+        (cv2.CAP_PROP_FRAME_WIDTH, 3840),
+        (cv2.CAP_PROP_FRAME_HEIGHT, 2160),
+    ]
 
 
 def test_camera_context_manager_releases_capture(

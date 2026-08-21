@@ -25,11 +25,26 @@ def bgr_frame_to_rgb_bytes(frame: np.ndarray) -> bytes:
     return rgb.tobytes()
 
 
+DEFAULT_CAPTURE_WIDTH = 3840
+DEFAULT_CAPTURE_HEIGHT = 2160
+
+
 class Camera:
-    def __init__(self, device_index: int = 0) -> None:
+    def __init__(
+        self,
+        device_index: int = 0,
+        width: int = DEFAULT_CAPTURE_WIDTH,
+        height: int = DEFAULT_CAPTURE_HEIGHT,
+    ) -> None:
         self._capture = cv2.VideoCapture(device_index)
         if not self._capture.isOpened():
             raise RuntimeError(f"Failed to open camera device index {device_index}")
+
+        # MJPGを指定しないとUVCカメラは低解像度のYUYVにフォールバックしやすいため、
+        # 高解像度キャプチャにはFOURCCの指定が必要。
+        self._capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc(*"MJPG"))
+        self._capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        self._capture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
     def read_frame(self) -> np.ndarray | None:
         ok, frame = self._capture.read()
