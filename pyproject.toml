@@ -12,7 +12,22 @@ dependencies = [
     "kivy>=2.3.1",
     "numpy>=2.5.2",
     "opencv-python>=5.0.0.93",
+    "yomitoku>=0.12.0",
+    "torch>=2.9.1",
+    "torchvision",
+    "pytorch-triton-rocm; sys_platform == 'linux'",
 ]
+
+# https://pytorch.org/get-started/locally/
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/rocm6.4"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch" }
+torchvision = { index = "pytorch" }
+pytorch-triton-rocm = { index = "pytorch" }
 
 [project.scripts]
 ocr-app = "ocr_app.main:main"
@@ -34,4 +49,8 @@ explicit_package_bases = true
 
 [[tool.mypy.overrides]]
 module = ["kivy.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["yomitoku.*"]
 ignore_missing_imports = true
