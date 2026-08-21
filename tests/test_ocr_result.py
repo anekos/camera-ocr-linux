@@ -71,6 +71,18 @@ def test_extract_recognized_text_includes_paragraphs_inside_figures() -> None:
     assert extract_recognized_text(document) == "outside\ninside"
 
 
+def test_extract_recognized_text_keeps_original_order_when_sort_is_false() -> None:
+    document = _document(
+        paragraphs=[
+            _paragraph("second", order=1),
+            _paragraph("first", order=0),
+        ],
+        figures=[],
+    )
+
+    assert extract_recognized_text(document, sort=False) == "second\nfirst"
+
+
 def test_extract_recognized_text_excludes_non_body_roles() -> None:
     document = _document(
         paragraphs=[

@@ -5,24 +5,28 @@ from yomitoku.document_analyzer import DocumentAnalyzerSchema, ParagraphSchema
 PAGE_NUMBER_ROLES = ("page_header", "page_footer")
 
 
-def _collect_paragraphs(analyzed: DocumentAnalyzerSchema) -> list[ParagraphSchema]:
+def _collect_paragraphs(
+    analyzed: DocumentAnalyzerSchema, sort: bool = True
+) -> list[ParagraphSchema]:
     paragraphs: list[ParagraphSchema] = list(analyzed.paragraphs)
     for figure in analyzed.figures:
         paragraphs.extend(figure.paragraphs)
-    paragraphs.sort(key=lambda paragraph: paragraph.order or 0)
+    if sort:
+        paragraphs.sort(key=lambda paragraph: paragraph.order or 0)
     return paragraphs
 
 
-def extract_recognized_text(analyzed: DocumentAnalyzerSchema) -> str:
-    """OCR結果から本文の認識済みテキストを、読み取り順に連結して取り出す。
+def extract_recognized_text(analyzed: DocumentAnalyzerSchema, sort: bool = True) -> str:
+    """OCR結果から本文の認識済みテキストを連結して取り出す。
 
-    段落は文書直下のものと図(figure)内のものを合わせて order 順に並べる。
-    見出し(section_headings)やページヘッダー・フッターなど、role が
-    None でない段落は本文ではないため除外する。
+    sort=Trueの場合、段落は文書直下のものと図(figure)内のものを合わせて
+    order順(読み取り順)に並べる。sort=Falseの場合は解析結果の元の順序の
+    まま出力する。見出し(section_headings)やページヘッダー・フッターなど、
+    role がNoneでない段落は本文ではないため、sortの値に関わらず除外する。
     """
     contents = [
         paragraph.contents
-        for paragraph in _collect_paragraphs(analyzed)
+        for paragraph in _collect_paragraphs(analyzed, sort=sort)
         if paragraph.role is None and paragraph.contents is not None
     ]
     return "\n".join(contents)
