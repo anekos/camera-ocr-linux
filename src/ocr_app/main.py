@@ -1,5 +1,8 @@
+from ocr_app.app import OcrApp
+
+
 def main() -> None:
-    print("ocr-app: Hello, World!")
+    OcrApp().run()
 
 
 if __name__ == "__main__":

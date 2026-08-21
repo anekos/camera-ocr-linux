@@ -1,0 +1,43 @@
+from types import TracebackType
+from typing import Self
+
+import cv2
+import numpy as np
+
+
+def bgr_frame_to_rgb_bytes(frame: np.ndarray) -> bytes:
+    """OpenCVのBGRフレームをKivy Texture用のRGBバイト列に変換する。
+
+    Kivyの Texture は左下原点、OpenCV のフレームは左上原点のため、
+    上下反転してから色順を BGR -> RGB に変換する。
+    """
+    flipped = cv2.flip(frame, 0)
+    rgb = cv2.cvtColor(flipped, cv2.COLOR_BGR2RGB)
+    return rgb.tobytes()
+
+
+class Camera:
+    def __init__(self, device_index: int = 0) -> None:
+        self._capture = cv2.VideoCapture(device_index)
+        if not self._capture.isOpened():
+            raise RuntimeError(f"Failed to open camera device index {device_index}")
+
+    def read_frame(self) -> np.ndarray | None:
+        ok, frame = self._capture.read()
+        if not ok:
+            return None
+        return frame
+
+    def release(self) -> None:
+        self._capture.release()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.release()
