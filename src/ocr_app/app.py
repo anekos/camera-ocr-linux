@@ -17,17 +17,19 @@ from kivy.uix.textinput import TextInput
 from yomitoku import DocumentAnalyzer
 
 from ocr_app.camera import Camera, bgr_frame_to_rgb_array, bgr_frame_to_rgb_bytes
-from ocr_app.ocr_result import extract_recognized_text
+from ocr_app.ocr_result import extract_page_number, extract_recognized_text
 
 logger = logging.getLogger(__name__)
 
 TARGET_FPS = 30
 CAMERA_DEVICE_INDEX = 0
 CONTROL_ROW_HEIGHT = 60
+CONTROL_ROW_SPACING = 10
 RESULT_TEXT_HEIGHT = 150
 RESULT_TEXT_MIN_HEIGHT = 60
 RESULT_TEXT_MAX_HEIGHT = 600
 RESOLUTION_LABEL_WIDTH = 120
+PAGE_NUMBER_LABEL_WIDTH = 120
 FONT_SIZE = 24
 SCROLLBAR_WIDTH = 12
 JAPANESE_FONT_PATH = (
@@ -101,12 +103,24 @@ class OcrApp(App):
             width=RESOLUTION_LABEL_WIDTH,
         )
 
+        self.page_number_label = Label(
+            text="",
+            font_name=JAPANESE_FONT_PATH,
+            font_size=FONT_SIZE,
+            size_hint_x=None,
+            width=PAGE_NUMBER_LABEL_WIDTH,
+        )
+
         control_row = BoxLayout(
-            orientation="horizontal", size_hint_y=None, height=CONTROL_ROW_HEIGHT
+            orientation="horizontal",
+            size_hint_y=None,
+            height=CONTROL_ROW_HEIGHT,
+            spacing=CONTROL_ROW_SPACING,
         )
         control_row.add_widget(self.copy_checkbox)
         control_row.add_widget(copy_label)
         control_row.add_widget(self.ocr_button)
+        control_row.add_widget(self.page_number_label)
         control_row.add_widget(self.resolution_label)
 
         layout = BoxLayout(orientation="vertical")
@@ -153,12 +167,16 @@ class OcrApp(App):
             analyzed, _ocr_vis, _layout_vis = self.analyzer(img)
             print(analyzed.model_dump_json(), flush=True)
             text = extract_recognized_text(analyzed)
-            Clock.schedule_once(lambda dt: self._apply_ocr_result(text))
+            page_number = extract_page_number(analyzed)
+            Clock.schedule_once(lambda dt: self._apply_ocr_result(text, page_number))
         finally:
             Clock.schedule_once(lambda dt: setattr(self.ocr_button, "disabled", False))
 
-    def _apply_ocr_result(self, text: str) -> None:
+    def _apply_ocr_result(self, text: str, page_number: int | None) -> None:
         self.result_text_input.text = text
+        self.page_number_label.text = (
+            f"ページ: {page_number}" if page_number is not None else ""
+        )
         if self.copy_checkbox.active:
             Clipboard.copy(text)
 
