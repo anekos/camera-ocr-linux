@@ -1,3 +1,7 @@
+import os
+
+os.environ.setdefault("SDL_VIDEO_X11_WMCLASS", "ocr-app.snca.net")
+
 from ocr_app.app import OcrApp
 
 
