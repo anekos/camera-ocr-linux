@@ -1,0 +1,6 @@
+def main() -> None:
+    print("ocr-app: Hello, World!")
+
+
+if __name__ == "__main__":
+    main()
