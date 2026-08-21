@@ -9,6 +9,7 @@ from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.clipboard import Clipboard
 from kivy.graphics.texture import Texture
+from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.checkbox import CheckBox
@@ -47,8 +48,30 @@ JAPANESE_FONT_PATH = (
 )
 
 
+class ClickableLabel(ButtonBehavior, Label):
+    pass
+
+
 class OcrApp(App):
     last_frame: np.ndarray | None = None
+
+    def _build_labeled_checkbox(
+        self, text: str, active: bool
+    ) -> tuple[CheckBox, ClickableLabel]:
+        checkbox = CheckBox(active=active, size_hint_x=None, width=CONTROL_ROW_HEIGHT)
+        label = ClickableLabel(
+            text=text,
+            font_name=JAPANESE_FONT_PATH,
+            font_size=FONT_SIZE,
+            size_hint_x=None,
+        )
+        label.bind(
+            texture_size=lambda instance, value: setattr(instance, "width", value[0])
+        )
+        label.bind(
+            on_release=lambda instance: setattr(checkbox, "active", not checkbox.active)
+        )
+        return checkbox, label
 
     def build(self) -> BoxLayout:
         self.image_widget = Image()
@@ -87,30 +110,11 @@ class OcrApp(App):
         )
         result_splitter.add_widget(result_scroll)
 
-        self.copy_checkbox = CheckBox(
-            active=True, size_hint_x=None, width=CONTROL_ROW_HEIGHT
+        self.copy_checkbox, copy_label = self._build_labeled_checkbox(
+            "クリップボードにコピー", active=True
         )
-        copy_label = Label(
-            text="クリップボードにコピー",
-            font_name=JAPANESE_FONT_PATH,
-            font_size=FONT_SIZE,
-            size_hint_x=None,
-        )
-        copy_label.bind(
-            texture_size=lambda instance, value: setattr(instance, "width", value[0])
-        )
-
-        self.flip_checkbox = CheckBox(
-            active=False, size_hint_x=None, width=CONTROL_ROW_HEIGHT
-        )
-        flip_label = Label(
-            text="反転",
-            font_name=JAPANESE_FONT_PATH,
-            font_size=FONT_SIZE,
-            size_hint_x=None,
-        )
-        flip_label.bind(
-            texture_size=lambda instance, value: setattr(instance, "width", value[0])
+        self.flip_checkbox, flip_label = self._build_labeled_checkbox(
+            "反転", active=False
         )
 
         self.ocr_button = Button(
