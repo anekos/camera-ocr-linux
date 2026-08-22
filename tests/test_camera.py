@@ -7,6 +7,7 @@ import pytest
 from ocr_app.camera import (
     bgr_frame_to_rgb_array,
     bgr_frame_to_rgb_bytes,
+    crop_frame,
     flip_horizontal,
     flip_vertical,
     save_frame_as_png,
@@ -98,6 +99,15 @@ def test_flip_horizontal_reverses_column_order() -> None:
         dtype=np.uint8,
     )
     np.testing.assert_array_equal(result, expected)
+
+
+def test_crop_frame_extracts_the_given_fractional_box() -> None:
+    # 4x4画像。box=(0.5, 0.5, 1.0, 1.0) は右下2x2を切り出す。
+    frame = np.arange(4 * 4 * 3, dtype=np.uint8).reshape(4, 4, 3)
+
+    result = crop_frame(frame, (0.5, 0.5, 1.0, 1.0))
+
+    np.testing.assert_array_equal(result, frame[2:4, 2:4])
 
 
 def test_save_frame_as_png_writes_readable_image_at_expected_path(

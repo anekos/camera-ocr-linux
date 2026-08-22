@@ -36,6 +36,15 @@ def flip_horizontal(frame: np.ndarray) -> np.ndarray:
     return cv2.flip(frame, 1)
 
 
+def crop_frame(frame: np.ndarray, box: tuple[float, float, float, float]) -> np.ndarray:
+    """boxで指定された相対矩形(left, top, right, bottom、いずれも0〜1)でフレームを切り出す。"""
+    left, top, right, bottom = box
+    height, width = frame.shape[:2]
+    x1, x2 = int(left * width), int(right * width)
+    y1, y2 = int(top * height), int(bottom * height)
+    return frame[y1:y2, x1:x2]
+
+
 def save_frame_as_png(frame: np.ndarray, output_dir: Path, timestamp: str) -> Path:
     """フレームをPNGとして output_dir に保存し、保存先のパスを返す。"""
     output_path = output_dir / f"ocr-app-capture-{timestamp}.png"
