@@ -8,7 +8,9 @@ import numpy as np
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.clipboard import Clipboard
+from kivy.graphics import Color, Line
 from kivy.graphics.texture import Texture
+from kivy.input.motionevent import MotionEvent
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
@@ -24,11 +26,13 @@ from ocr_app.camera import (
     Camera,
     bgr_frame_to_rgb_array,
     bgr_frame_to_rgb_bytes,
+    crop_frame,
     flip_horizontal,
     flip_vertical,
     save_frame_as_png,
 )
 from ocr_app.ocr_result import extract_page_number, extract_recognized_text
+from ocr_app.selection import normalize_box, touch_to_image_fraction
 from ocr_app.settings import load_settings, save_settings
 
 logger = logging.getLogger(__name__)
@@ -48,6 +52,7 @@ JAPANESE_FONT_PATH = (
     "/home/anekos/.nix-profile/share/fonts/truetype/migu/migu-1m-regular.ttf"
 )
 SETTINGS_PATH = Path.home() / ".config" / "ocr-app" / "settings.json"
+SELECTION_CLICK_THRESHOLD = 10
 
 
 class ClickableLabel(ButtonBehavior, Label):
@@ -56,6 +61,8 @@ class ClickableLabel(ButtonBehavior, Label):
 
 class OcrApp(App):
     last_frame: np.ndarray | None = None
+    selection_box: tuple[float, float, float, float] | None = None
+    _selection_start: tuple[float, float] | None = None
 
     def _build_labeled_checkbox(
         self, text: str, active: bool
@@ -77,6 +84,12 @@ class OcrApp(App):
 
     def build(self) -> BoxLayout:
         self.image_widget = Image()
+        self.image_widget.bind(on_touch_down=self._on_preview_touch_down)
+        self.image_widget.bind(on_touch_move=self._on_preview_touch_move)
+        self.image_widget.bind(on_touch_up=self._on_preview_touch_up)
+        with self.image_widget.canvas.after:
+            Color(1, 0, 0, 1)
+            self.selection_line = Line(width=2)
 
         self.result_text_input = TextInput(
             readonly=True,
@@ -190,6 +203,76 @@ class OcrApp(App):
         Clock.schedule_interval(self._update, 1.0 / TARGET_FPS)
         return layout
 
+    def _touch_to_fraction(self, x: float, y: float) -> tuple[float, float] | None:
+        widget = self.image_widget
+        image_width, image_height = widget.norm_image_size
+        return touch_to_image_fraction(
+            x,
+            y,
+            widget.x,
+            widget.y,
+            widget.width,
+            widget.height,
+            image_width,
+            image_height,
+        )
+
+    def _on_preview_touch_down(self, instance: Image, touch: MotionEvent) -> bool:
+        if not self.image_widget.collide_point(*touch.pos):
+            return False
+        self._selection_start = (touch.x, touch.y)
+        touch.grab(self.image_widget)
+        return True
+
+    def _on_preview_touch_move(self, instance: Image, touch: MotionEvent) -> bool:
+        if touch.grab_current is not self.image_widget or self._selection_start is None:
+            return False
+        self._draw_selection_overlay(self._selection_start, (touch.x, touch.y))
+        return True
+
+    def _on_preview_touch_up(self, instance: Image, touch: MotionEvent) -> bool:
+        if touch.grab_current is not self.image_widget or self._selection_start is None:
+            return False
+        touch.ungrab(self.image_widget)
+
+        start = self._selection_start
+        end = (touch.x, touch.y)
+        self._selection_start = None
+
+        distance = ((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2) ** 0.5
+        if distance < SELECTION_CLICK_THRESHOLD:
+            self.selection_box = None
+            self._draw_selection_overlay(None, None)
+            return True
+
+        fraction_start = self._touch_to_fraction(*start)
+        fraction_end = self._touch_to_fraction(*end)
+        if fraction_start is None or fraction_end is None:
+            self.selection_box = None
+            self._draw_selection_overlay(None, None)
+            return True
+
+        self.selection_box = normalize_box(
+            fraction_start[0], fraction_start[1], fraction_end[0], fraction_end[1]
+        )
+        self._draw_selection_overlay(start, end)
+        return True
+
+    def _draw_selection_overlay(
+        self, p1: tuple[float, float] | None, p2: tuple[float, float] | None
+    ) -> None:
+        if p1 is None or p2 is None:
+            self.selection_line.points = []
+            return
+        x1, y1 = p1
+        x2, y2 = p2
+        self.selection_line.points = [x1, y1, x2, y1, x2, y2, x1, y2, x1, y1]
+
+    def _crop_if_selected(self, frame: np.ndarray) -> np.ndarray:
+        if self.selection_box is None:
+            return frame.copy()
+        return crop_frame(frame, self.selection_box).copy()
+
     def _update(self, dt: float) -> None:
         frame = self.camera.read_frame()
         if frame is None:
@@ -218,7 +301,7 @@ class OcrApp(App):
             logger.warning("No frame available yet; skipping OCR")
             return
 
-        frame = self.last_frame.copy()
+        frame = self._crop_if_selected(self.last_frame)
         sort_output = not self.raw_order_checkbox.active
         self.ocr_button.disabled = True
         threading.Thread(
@@ -250,10 +333,9 @@ class OcrApp(App):
             logger.warning("No frame available yet; skipping save")
             return
 
+        frame = self._crop_if_selected(self.last_frame)
         timestamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f")
-        output_path = save_frame_as_png(
-            self.last_frame, Path(tempfile.gettempdir()), timestamp
-        )
+        output_path = save_frame_as_png(frame, Path(tempfile.gettempdir()), timestamp)
         Clipboard.copy(str(output_path))
 
     def _save_settings(self) -> None:
