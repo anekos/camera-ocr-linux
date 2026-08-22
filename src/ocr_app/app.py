@@ -255,9 +255,6 @@ class OcrApp(App):
         toggle_row.add_widget(self.spread_checkbox)
         toggle_row.add_widget(spread_label)
         toggle_row.add_widget(self.engine_spinner)
-        toggle_row.add_widget(Widget())  # 残り幅を埋めて、以降を右寄せにするスペーサー
-        toggle_row.add_widget(self.page_number_label)
-        toggle_row.add_widget(self.resolution_label)
 
         button_row = BoxLayout(
             orientation="horizontal",
@@ -268,11 +265,22 @@ class OcrApp(App):
         button_row.add_widget(self.ocr_button)
         button_row.add_widget(self.save_button)
 
+        status_row = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=CONTROL_ROW_HEIGHT,
+            spacing=CONTROL_ROW_SPACING,
+        )
+        status_row.add_widget(Widget())  # 残り幅を埋めて、以降を右寄せにするスペーサー
+        status_row.add_widget(self.page_number_label)
+        status_row.add_widget(self.resolution_label)
+
         layout = BoxLayout(orientation="vertical")
         layout.add_widget(self.image_widget)
         layout.add_widget(result_splitter)
         layout.add_widget(toggle_row)
         layout.add_widget(button_row)
+        layout.add_widget(status_row)
 
         self.camera = Camera(device_index=CAMERA_DEVICE_INDEX)
         self.analyzer = DocumentAnalyzer(device="cuda")
