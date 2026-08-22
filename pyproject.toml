@@ -17,6 +17,7 @@ dependencies = [
     "torchvision",
     "pytorch-triton-rocm; sys_platform == 'linux'",
     "app-paths>=0.0.8",
+    "httpx>=0.28.1",
 ]
 
 # https://pytorch.org/get-started/locally/

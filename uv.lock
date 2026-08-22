@@ -995,6 +995,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "app-paths" },
+    { name = "httpx" },
     { name = "kivy" },
     { name = "numpy" },
     { name = "opencv-python" },
@@ -1015,6 +1016,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "app-paths", specifier = ">=0.0.8" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "kivy", specifier = ">=2.3.1" },
     { name = "numpy", specifier = ">=2.5.2" },
     { name = "opencv-python", specifier = ">=5.0.0.93" },

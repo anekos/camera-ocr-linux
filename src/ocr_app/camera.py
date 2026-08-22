@@ -45,6 +45,12 @@ def crop_frame(frame: np.ndarray, box: tuple[float, float, float, float]) -> np.
     return frame[y1:y2, x1:x2]
 
 
+def encode_frame_as_png(frame: np.ndarray) -> bytes:
+    """フレームをPNG形式にエンコードしたバイト列を返す(外部APIへのアップロード用)。"""
+    _ok, buffer = cv2.imencode(".png", frame)
+    return buffer.tobytes()
+
+
 def save_frame_as_png(frame: np.ndarray, output_dir: Path, timestamp: str) -> Path:
     """フレームをPNGとして output_dir に保存し、保存先のパスを返す。output_dir が無ければ作成する。"""
     output_dir.mkdir(parents=True, exist_ok=True)

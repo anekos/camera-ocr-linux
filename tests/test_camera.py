@@ -8,6 +8,7 @@ from ocr_app.camera import (
     bgr_frame_to_rgb_array,
     bgr_frame_to_rgb_bytes,
     crop_frame,
+    encode_frame_as_png,
     flip_horizontal,
     flip_vertical,
     save_frame_as_png,
@@ -108,6 +109,15 @@ def test_crop_frame_extracts_the_given_fractional_box() -> None:
     result = crop_frame(frame, (0.5, 0.5, 1.0, 1.0))
 
     np.testing.assert_array_equal(result, frame[2:4, 2:4])
+
+
+def test_encode_frame_as_png_round_trips_through_cv2_imdecode() -> None:
+    frame = np.arange(4 * 4 * 3, dtype=np.uint8).reshape(4, 4, 3)
+
+    encoded = encode_frame_as_png(frame)
+    decoded = cv2.imdecode(np.frombuffer(encoded, dtype=np.uint8), cv2.IMREAD_COLOR)
+
+    np.testing.assert_array_equal(decoded, frame)
 
 
 def test_save_frame_as_png_writes_readable_image_at_expected_path(
