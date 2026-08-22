@@ -4,7 +4,7 @@ from yomitoku.document_analyzer import (
     ParagraphSchema,
 )
 
-from ocr_app.ocr_result import extract_page_number, extract_recognized_text
+from ocr_app.ocr.yomitoku import extract_page_number, extract_recognized_text
 
 
 def _paragraph(

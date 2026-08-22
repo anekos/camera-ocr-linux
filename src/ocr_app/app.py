@@ -33,7 +33,7 @@ from ocr_app.camera import (
     save_frame_as_png,
 )
 from ocr_app.notifications import send_notification
-from ocr_app.ocr_result import extract_page_number, extract_recognized_text
+from ocr_app.ocr.yomitoku import extract_page_number, extract_recognized_text
 from ocr_app.selection import normalize_box, touch_to_image_fraction
 from ocr_app.settings import (
     get_bool,
