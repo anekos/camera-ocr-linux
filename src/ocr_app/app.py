@@ -34,7 +34,12 @@ from ocr_app.camera import (
 )
 from ocr_app.ocr_result import extract_page_number, extract_recognized_text
 from ocr_app.selection import normalize_box, touch_to_image_fraction
-from ocr_app.settings import load_settings, save_settings
+from ocr_app.settings import (
+    get_bool,
+    load_settings,
+    resolve_save_directory,
+    save_settings,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -127,21 +132,35 @@ class OcrApp(App):
         result_splitter.add_widget(result_scroll)
 
         settings = load_settings(SETTINGS_PATH)
+        self.save_directory = resolve_save_directory(
+            settings, AppPaths.get_paths("ocr-app", "anekos").user_data
+        )
         self.copy_checkbox, copy_label = self._build_labeled_checkbox(
-            "クリップボードにコピー", active=settings.get("copy_to_clipboard", True)
+            "クリップボードにコピー",
+            active=get_bool(settings, "copy_to_clipboard", True),
         )
         self.flip_checkbox, flip_label = self._build_labeled_checkbox(
-            "反転", active=settings.get("flip", False)
+            "反転", active=get_bool(settings, "flip", False)
         )
         self.raw_order_checkbox, raw_order_label = self._build_labeled_checkbox(
-            "そのまま出力", active=settings.get("raw_order", False)
+            "そのまま出力", active=get_bool(settings, "raw_order", False)
+        )
+        self.save_to_fixed_directory_checkbox, save_to_fixed_directory_label = (
+            self._build_labeled_checkbox(
+                "固定ディレクトリに保存",
+                active=get_bool(settings, "save_to_fixed_directory", False),
+            )
         )
         for checkbox in (
             self.copy_checkbox,
             self.flip_checkbox,
             self.raw_order_checkbox,
+            self.save_to_fixed_directory_checkbox,
         ):
             checkbox.bind(active=lambda instance, value: self._save_settings())
+        # 保存先ディレクトリが設定ファイルに無かった場合の補完値を含め、
+        # 起動時点の設定を正規の形で書き戻しておく。
+        self._save_settings()
 
         self.ocr_button = Button(
             text="OCR実行", font_name=JAPANESE_FONT_PATH, font_size=FONT_SIZE
@@ -181,6 +200,8 @@ class OcrApp(App):
         toggle_row.add_widget(flip_label)
         toggle_row.add_widget(self.raw_order_checkbox)
         toggle_row.add_widget(raw_order_label)
+        toggle_row.add_widget(self.save_to_fixed_directory_checkbox)
+        toggle_row.add_widget(save_to_fixed_directory_label)
         toggle_row.add_widget(self.page_number_label)
         toggle_row.add_widget(self.resolution_label)
 
@@ -335,8 +356,13 @@ class OcrApp(App):
             return
 
         frame = self._crop_if_selected(self.last_frame)
+        output_dir = (
+            self.save_directory
+            if self.save_to_fixed_directory_checkbox.active
+            else Path(tempfile.gettempdir())
+        )
         timestamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f")
-        output_path = save_frame_as_png(frame, Path(tempfile.gettempdir()), timestamp)
+        output_path = save_frame_as_png(frame, output_dir, timestamp)
         Clipboard.copy(str(output_path))
 
     def _save_settings(self) -> None:
@@ -346,6 +372,8 @@ class OcrApp(App):
                 "copy_to_clipboard": self.copy_checkbox.active,
                 "flip": self.flip_checkbox.active,
                 "raw_order": self.raw_order_checkbox.active,
+                "save_to_fixed_directory": self.save_to_fixed_directory_checkbox.active,
+                "save_directory": str(self.save_directory),
             },
         )
 
