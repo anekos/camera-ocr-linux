@@ -37,6 +37,7 @@ from ocr_app.camera import (
     flip_vertical,
     save_frame_as_png,
 )
+from ocr_app.formatting import format_selection_as_quote
 from ocr_app.notifications import send_notification
 from ocr_app.ocr import google_vision
 from ocr_app.ocr.yomitoku import extract_page_number, extract_recognized_text
@@ -91,6 +92,7 @@ class OcrApp(App):
     last_frame: np.ndarray | None = None
     selection_box: tuple[float, float, float, float] | None = None
     _selection_start: tuple[float, float] | None = None
+    current_page_number: int | None = None
 
     def _build_labeled_checkbox(
         self, text: str, active: bool
@@ -480,6 +482,7 @@ class OcrApp(App):
 
     def _apply_ocr_result(self, text: str, page_number: int | None) -> None:
         self.result_text_input.text = text
+        self.current_page_number = page_number
         self.page_number_label.text = (
             f"ページ: {page_number}" if page_number is not None else ""
         )
@@ -521,7 +524,7 @@ class OcrApp(App):
         self, instance: TextInput, value: str
     ) -> None:
         if value:
-            Clipboard.copy(value)
+            Clipboard.copy(format_selection_as_quote(value, self.current_page_number))
 
     def on_stop(self) -> None:
         self.camera.release()
