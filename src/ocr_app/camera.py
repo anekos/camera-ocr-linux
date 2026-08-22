@@ -46,7 +46,8 @@ def crop_frame(frame: np.ndarray, box: tuple[float, float, float, float]) -> np.
 
 
 def save_frame_as_png(frame: np.ndarray, output_dir: Path, timestamp: str) -> Path:
-    """フレームをPNGとして output_dir に保存し、保存先のパスを返す。"""
+    """フレームをPNGとして output_dir に保存し、保存先のパスを返す。output_dir が無ければ作成する。"""
+    output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"ocr-app-capture-{timestamp}.png"
     cv2.imwrite(str(output_path), frame)
     return output_path

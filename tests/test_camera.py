@@ -123,6 +123,15 @@ def test_save_frame_as_png_writes_readable_image_at_expected_path(
     assert saved.shape == frame.shape
 
 
+def test_save_frame_as_png_creates_missing_output_dir(tmp_path: Path) -> None:
+    frame = np.zeros((2, 3, 3), dtype=np.uint8)
+    output_dir = tmp_path / "nested" / "captures"
+
+    output_path = save_frame_as_png(frame, output_dir, "20260101-120000")
+
+    assert output_path.exists()
+
+
 class _FakeVideoCapture:
     def __init__(
         self,
