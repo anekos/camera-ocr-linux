@@ -2,6 +2,7 @@ from pathlib import Path
 
 from ocr_app.settings import (
     get_bool,
+    get_float,
     load_settings,
     resolve_save_directory,
     save_settings,
@@ -54,3 +55,15 @@ def test_get_bool_returns_default_when_key_missing() -> None:
 
 def test_get_bool_returns_stored_value_when_present() -> None:
     assert get_bool({"flip": True}, "flip", default=False) is True
+
+
+def test_get_float_returns_default_when_key_missing() -> None:
+    assert get_float({}, "result_height", default=150.0) == 150.0
+
+
+def test_get_float_returns_stored_value_when_present() -> None:
+    assert get_float({"result_height": 220.0}, "result_height", default=150.0) == 220.0
+
+
+def test_get_float_returns_default_when_type_is_wrong() -> None:
+    assert get_float({"result_height": True}, "result_height", default=150.0) == 150.0

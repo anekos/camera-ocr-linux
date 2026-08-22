@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-Settings = dict[str, bool | str]
+Settings = dict[str, bool | str | float]
 
 
 def load_settings(path: Path) -> Settings:
@@ -24,6 +24,16 @@ def get_bool(settings: Settings, key: str, default: bool) -> bool:
     """設定からbool値を取り出す。無いか型が違えばdefaultを返す。"""
     value = settings.get(key, default)
     return value if isinstance(value, bool) else default
+
+
+def get_float(settings: Settings, key: str, default: float) -> float:
+    """設定からfloat値を取り出す。無いか型が違えばdefaultを返す。"""
+    value = settings.get(key, default)
+    return (
+        value
+        if isinstance(value, float | int) and not isinstance(value, bool)
+        else default
+    )
 
 
 def resolve_save_directory(settings: Settings, default: Path) -> Path:

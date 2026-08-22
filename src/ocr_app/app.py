@@ -48,6 +48,7 @@ from ocr_app.selection import (
 )
 from ocr_app.settings import (
     get_bool,
+    get_float,
     load_settings,
     resolve_save_directory,
     save_settings,
@@ -148,16 +149,18 @@ class OcrApp(App):
             selection_text=self._on_result_selection_text_changed
         )
 
-        result_splitter = Splitter(
+        settings = load_settings(SETTINGS_PATH)
+
+        self.result_splitter = Splitter(
             sizable_from="top",
             size_hint=(1, None),
-            height=RESULT_TEXT_HEIGHT,
+            height=get_float(settings, "result_height", RESULT_TEXT_HEIGHT),
             min_size=RESULT_TEXT_MIN_HEIGHT,
             max_size=RESULT_TEXT_MAX_HEIGHT,
         )
-        result_splitter.add_widget(result_scroll)
+        self.result_splitter.add_widget(result_scroll)
+        self.result_splitter.bind(height=lambda instance, value: self._save_settings())
 
-        settings = load_settings(SETTINGS_PATH)
         self.save_directory = resolve_save_directory(
             settings, AppPaths.get_paths("ocr-app", "anekos").user_data
         )
@@ -277,7 +280,7 @@ class OcrApp(App):
 
         layout = BoxLayout(orientation="vertical")
         layout.add_widget(self.image_widget)
-        layout.add_widget(result_splitter)
+        layout.add_widget(self.result_splitter)
         layout.add_widget(toggle_row)
         layout.add_widget(button_row)
         layout.add_widget(status_row)
@@ -525,6 +528,7 @@ class OcrApp(App):
                 "spread": self.spread_checkbox.active,
                 "save_directory": str(self.save_directory),
                 "ocr_engine": self._selected_engine(),
+                "result_height": self.result_splitter.height,
             },
         )
 
