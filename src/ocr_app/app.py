@@ -32,6 +32,7 @@ from ocr_app.camera import (
     flip_vertical,
     save_frame_as_png,
 )
+from ocr_app.notifications import send_notification
 from ocr_app.ocr_result import extract_page_number, extract_recognized_text
 from ocr_app.selection import normalize_box, touch_to_image_fraction
 from ocr_app.settings import (
@@ -349,6 +350,7 @@ class OcrApp(App):
         )
         if self.copy_checkbox.active:
             Clipboard.copy(text)
+        send_notification("OCR完了", f"{len(text)}文字を認識しました")
 
     def _on_save_button_press(self, instance: Button) -> None:
         if self.last_frame is None:
@@ -364,6 +366,7 @@ class OcrApp(App):
         timestamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f")
         output_path = save_frame_as_png(frame, output_dir, timestamp)
         Clipboard.copy(str(output_path))
+        send_notification("画像を保存しました", str(output_path))
 
     def _save_settings(self) -> None:
         save_settings(
