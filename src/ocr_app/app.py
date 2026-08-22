@@ -67,6 +67,8 @@ RESOLUTION_LABEL_WIDTH = 120
 PAGE_NUMBER_LABEL_WIDTH = 120
 FONT_SIZE = 24
 SCROLLBAR_WIDTH = 12
+# Kivyのデフォルト(20sp)はホイール1ノッチでの移動量が小さすぎるため広げる。
+RESULT_SCROLL_WHEEL_DISTANCE = 100
 JAPANESE_FONT_PATH = (
     "/home/anekos/.nix-profile/share/fonts/truetype/migu/migu-1m-regular.ttf"
 )
@@ -135,7 +137,11 @@ class OcrApp(App):
         # 常にスクロール判定に取られ、TextInputのドラッグによる範囲選択が
         # 効かなくなる。"bars"のみにすることで、スクロールバー以外への
         # タッチはTextInputへそのまま渡され、選択操作が機能する。
-        result_scroll = ScrollView(bar_width=SCROLLBAR_WIDTH, scroll_type=["bars"])
+        result_scroll = ScrollView(
+            bar_width=SCROLLBAR_WIDTH,
+            scroll_type=["bars"],
+            scroll_wheel_distance=RESULT_SCROLL_WHEEL_DISTANCE,
+        )
         result_scroll.add_widget(self.result_text_input)
 
         def _fit_result_text_height(*_args: object) -> None:
