@@ -1,9 +1,11 @@
+import json
 import logging
 import tempfile
 import threading
 from datetime import datetime
 from pathlib import Path
 
+import httpx
 import numpy as np
 from app_paths import AppPaths
 from kivy.app import App
@@ -19,6 +21,7 @@ from kivy.uix.checkbox import CheckBox
 from kivy.uix.image import Image
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.spinner import Spinner
 from kivy.uix.splitter import Splitter
 from kivy.uix.textinput import TextInput
 from yomitoku import DocumentAnalyzer
@@ -28,11 +31,13 @@ from ocr_app.camera import (
     bgr_frame_to_rgb_array,
     bgr_frame_to_rgb_bytes,
     crop_frame,
+    encode_frame_as_png,
     flip_horizontal,
     flip_vertical,
     save_frame_as_png,
 )
 from ocr_app.notifications import send_notification
+from ocr_app.ocr import google_vision
 from ocr_app.ocr.yomitoku import extract_page_number, extract_recognized_text
 from ocr_app.selection import normalize_box, touch_to_image_fraction
 from ocr_app.settings import (
@@ -60,6 +65,17 @@ JAPANESE_FONT_PATH = (
 )
 SETTINGS_PATH = AppPaths.get_paths("ocr-app", "anekos").user_config / "settings.json"
 SELECTION_CLICK_THRESHOLD = 10
+ENGINE_SPINNER_WIDTH = 260
+
+# OCRエンジンのID(設定ファイルに保存する値)と、Spinnerに表示するラベルの対応。
+# 他のOCR API(GCV以外)を足すときはここに追加すればよい。
+OCR_ENGINE_YOMITOKU = "yomitoku"
+OCR_ENGINE_GOOGLE_VISION = "google_vision"
+OCR_ENGINE_LABELS = {
+    OCR_ENGINE_YOMITOKU: "yomitoku",
+    OCR_ENGINE_GOOGLE_VISION: "Google Cloud Vision",
+}
+DEFAULT_OCR_ENGINE = OCR_ENGINE_YOMITOKU
 
 
 class ClickableLabel(ButtonBehavior, Label):
@@ -159,6 +175,20 @@ class OcrApp(App):
             self.save_to_fixed_directory_checkbox,
         ):
             checkbox.bind(active=lambda instance, value: self._save_settings())
+
+        saved_engine = settings.get("ocr_engine")
+        if saved_engine not in OCR_ENGINE_LABELS:
+            saved_engine = DEFAULT_OCR_ENGINE
+        self.engine_spinner = Spinner(
+            text=OCR_ENGINE_LABELS[saved_engine],
+            values=list(OCR_ENGINE_LABELS.values()),
+            font_name=JAPANESE_FONT_PATH,
+            font_size=FONT_SIZE,
+            size_hint_x=None,
+            width=ENGINE_SPINNER_WIDTH,
+        )
+        self.engine_spinner.bind(text=lambda instance, value: self._save_settings())
+
         # 保存先ディレクトリが設定ファイルに無かった場合の補完値を含め、
         # 起動時点の設定を正規の形で書き戻しておく。
         self._save_settings()
@@ -203,6 +233,7 @@ class OcrApp(App):
         toggle_row.add_widget(raw_order_label)
         toggle_row.add_widget(self.save_to_fixed_directory_checkbox)
         toggle_row.add_widget(save_to_fixed_directory_label)
+        toggle_row.add_widget(self.engine_spinner)
         toggle_row.add_widget(self.page_number_label)
         toggle_row.add_widget(self.resolution_label)
 
@@ -296,6 +327,12 @@ class OcrApp(App):
             return frame.copy()
         return crop_frame(frame, self.selection_box).copy()
 
+    def _selected_engine(self) -> str:
+        for engine_id, label in OCR_ENGINE_LABELS.items():
+            if label == self.engine_spinner.text:
+                return engine_id
+        return DEFAULT_OCR_ENGINE
+
     def _update(self, dt: float) -> None:
         frame = self.camera.read_frame()
         if frame is None:
@@ -326,22 +363,62 @@ class OcrApp(App):
 
         frame = self._crop_if_selected(self.last_frame)
         sort_output = not self.raw_order_checkbox.active
+        engine = self._selected_engine()
         self.ocr_button.disabled = True
         threading.Thread(
-            target=self._run_ocr, args=(frame, sort_output), daemon=True
+            target=self._run_ocr,
+            args=(frame, sort_output, engine),
+            daemon=True,
         ).start()
 
-    def _run_ocr(self, frame: np.ndarray, sort_output: bool) -> None:
+    def _run_ocr(self, frame: np.ndarray, sort_output: bool, engine: str) -> None:
         try:
-            img = bgr_frame_to_rgb_array(frame)
-            analyzed, _ocr_vis, _layout_vis = self.analyzer(img)
-            print(analyzed.model_dump_json(), flush=True)
-            text = extract_recognized_text(analyzed, sort=sort_output)
-            image_height, image_width = img.shape[:2]
-            page_number = extract_page_number(analyzed, image_width, image_height)
-            Clock.schedule_once(lambda dt: self._apply_ocr_result(text, page_number))
+            if engine == OCR_ENGINE_GOOGLE_VISION:
+                self._run_google_vision_ocr(frame)
+            elif engine == OCR_ENGINE_YOMITOKU:
+                self._run_yomitoku_ocr(frame, sort_output)
+            else:
+                logger.warning("Unknown OCR engine: %s", engine)
         finally:
             Clock.schedule_once(lambda dt: setattr(self.ocr_button, "disabled", False))
+
+    def _run_yomitoku_ocr(self, frame: np.ndarray, sort_output: bool) -> None:
+        img = bgr_frame_to_rgb_array(frame)
+        analyzed, _ocr_vis, _layout_vis = self.analyzer(img)
+        print(analyzed.model_dump_json(), flush=True)
+        text = extract_recognized_text(analyzed, sort=sort_output)
+        image_height, image_width = img.shape[:2]
+        page_number = extract_page_number(analyzed, image_width, image_height)
+        Clock.schedule_once(lambda dt: self._apply_ocr_result(text, page_number))
+
+    def _run_google_vision_ocr(self, frame: np.ndarray) -> None:
+        api_key = google_vision.get_api_key()
+        if api_key is None:
+            logger.warning(
+                "%s is not set; skipping Google Vision OCR",
+                google_vision.API_KEY_ENV_VAR,
+            )
+            send_notification(
+                "Google Cloud Vision",
+                f"環境変数 {google_vision.API_KEY_ENV_VAR} が設定されていません",
+            )
+            return
+
+        image_bytes = encode_frame_as_png(frame)
+        try:
+            response = google_vision.analyze(image_bytes, api_key)
+        except httpx.HTTPError as error:
+            logger.warning("Google Vision API request failed: %s", error)
+            send_notification(
+                "Google Cloud Vision", f"リクエストに失敗しました: {error}"
+            )
+            return
+
+        print(json.dumps(response), flush=True)
+        text = google_vision.extract_recognized_text(response)
+        height, width = frame.shape[:2]
+        page_number = google_vision.extract_page_number(response, width, height)
+        Clock.schedule_once(lambda dt: self._apply_ocr_result(text, page_number))
 
     def _apply_ocr_result(self, text: str, page_number: int | None) -> None:
         self.result_text_input.text = text
@@ -377,6 +454,7 @@ class OcrApp(App):
                 "raw_order": self.raw_order_checkbox.active,
                 "save_to_fixed_directory": self.save_to_fixed_directory_checkbox.active,
                 "save_directory": str(self.save_directory),
+                "ocr_engine": self._selected_engine(),
             },
         )
 
