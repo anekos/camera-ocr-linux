@@ -119,7 +119,7 @@ class OcrApp(App):
             Color(1, 0, 0, 1)
             self.selection_line = Line(width=2)
             Color(0, 1, 1, 1)
-            self.spread_guide_line = Line(width=1)
+            self.spread_guide_line = Line(width=4)
 
         self.result_text_input = TextInput(
             readonly=True,
