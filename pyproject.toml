@@ -16,6 +16,7 @@ dependencies = [
     "torch>=2.9.1",
     "torchvision",
     "pytorch-triton-rocm; sys_platform == 'linux'",
+    "app-paths>=0.0.8",
 ]
 
 # https://pytorch.org/get-started/locally/
@@ -53,4 +54,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["yomitoku.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["app_paths"]
 ignore_missing_imports = true

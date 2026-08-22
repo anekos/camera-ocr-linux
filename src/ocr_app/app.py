@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
+from app_paths import AppPaths
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.clipboard import Clipboard
@@ -51,7 +52,7 @@ SCROLLBAR_WIDTH = 12
 JAPANESE_FONT_PATH = (
     "/home/anekos/.nix-profile/share/fonts/truetype/migu/migu-1m-regular.ttf"
 )
-SETTINGS_PATH = Path.home() / ".config" / "ocr-app" / "settings.json"
+SETTINGS_PATH = AppPaths.get_paths("ocr-app", "anekos").user_config / "settings.json"
 SELECTION_CLICK_THRESHOLD = 10
 
 
