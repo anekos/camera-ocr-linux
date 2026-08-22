@@ -418,7 +418,9 @@ class OcrApp(App):
                 left_text, left_page = self._run_single_ocr(
                     crop_frame(frame, (0.0, 0.0, 0.5, 1.0)), sort_output, engine
                 )
-                text = "\n".join(t for t in (right_text, left_text) if t)
+                # ページ内の段落区切りは"\n"のため、ページの境目は空行("\n\n")
+                # にして区別できるようにする。
+                text = "\n\n".join(t for t in (right_text, left_text) if t)
                 page_number = right_page if right_page is not None else left_page
             else:
                 text, page_number = self._run_single_ocr(frame, sort_output, engine)
