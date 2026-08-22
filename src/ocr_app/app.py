@@ -40,7 +40,11 @@ from ocr_app.camera import (
 from ocr_app.notifications import send_notification
 from ocr_app.ocr import google_vision
 from ocr_app.ocr.yomitoku import extract_page_number, extract_recognized_text
-from ocr_app.selection import normalize_box, touch_to_image_fraction
+from ocr_app.selection import (
+    normalize_box,
+    spread_guide_line_points,
+    touch_to_image_fraction,
+)
 from ocr_app.settings import (
     get_bool,
     load_settings,
@@ -114,6 +118,8 @@ class OcrApp(App):
         with self.image_widget.canvas.after:
             Color(1, 0, 0, 1)
             self.selection_line = Line(width=2)
+            Color(0, 1, 1, 1)
+            self.spread_guide_line = Line(width=1)
 
         self.result_text_input = TextInput(
             readonly=True,
@@ -169,11 +175,15 @@ class OcrApp(App):
                 active=get_bool(settings, "save_to_fixed_directory", False),
             )
         )
+        self.spread_checkbox, spread_label = self._build_labeled_checkbox(
+            "見開き(右→左)", active=get_bool(settings, "spread", False)
+        )
         for checkbox in (
             self.copy_checkbox,
             self.flip_checkbox,
             self.raw_order_checkbox,
             self.save_to_fixed_directory_checkbox,
+            self.spread_checkbox,
         ):
             checkbox.bind(active=lambda instance, value: self._save_settings())
 
@@ -240,6 +250,8 @@ class OcrApp(App):
         toggle_row.add_widget(raw_order_label)
         toggle_row.add_widget(self.save_to_fixed_directory_checkbox)
         toggle_row.add_widget(save_to_fixed_directory_label)
+        toggle_row.add_widget(self.spread_checkbox)
+        toggle_row.add_widget(spread_label)
         toggle_row.add_widget(self.engine_spinner)
         toggle_row.add_widget(Widget())  # 残り幅を埋めて、以降を右寄せにするスペーサー
         toggle_row.add_widget(self.page_number_label)
@@ -363,6 +375,18 @@ class OcrApp(App):
             bufferfmt="ubyte",
         )
         self.image_widget.texture = texture
+        self._update_spread_guide_line()
+
+    def _update_spread_guide_line(self) -> None:
+        if not self.spread_checkbox.active:
+            self.spread_guide_line.points = []
+            return
+        widget = self.image_widget
+        image_width, image_height = widget.norm_image_size
+        x1, y1, x2, y2 = spread_guide_line_points(
+            widget.x, widget.y, widget.width, widget.height, image_width, image_height
+        )
+        self.spread_guide_line.points = [x1, y1, x2, y2]
 
     def _on_ocr_button_press(self, instance: Button) -> None:
         if self.last_frame is None:
@@ -372,34 +396,58 @@ class OcrApp(App):
         frame = self._crop_if_selected(self.last_frame)
         sort_output = not self.raw_order_checkbox.active
         engine = self._selected_engine()
+        spread = self.spread_checkbox.active
         self.ocr_button.disabled = True
         threading.Thread(
             target=self._run_ocr,
-            args=(frame, sort_output, engine),
+            args=(frame, sort_output, engine, spread),
             daemon=True,
         ).start()
 
-    def _run_ocr(self, frame: np.ndarray, sort_output: bool, engine: str) -> None:
+    def _run_ocr(
+        self, frame: np.ndarray, sort_output: bool, engine: str, spread: bool
+    ) -> None:
         try:
-            if engine == OCR_ENGINE_GOOGLE_VISION:
-                self._run_google_vision_ocr(frame)
-            elif engine == OCR_ENGINE_YOMITOKU:
-                self._run_yomitoku_ocr(frame, sort_output)
+            if spread:
+                # 見開き2ページを一度にOCRさせると、yomitokuが段をページを
+                # またいで誤って結び付けてしまうため、右半分・左半分を
+                # 別々にOCRしてから連結する(縦書きの綴じ方向を前提に右→左)。
+                right_text, right_page = self._run_single_ocr(
+                    crop_frame(frame, (0.5, 0.0, 1.0, 1.0)), sort_output, engine
+                )
+                left_text, left_page = self._run_single_ocr(
+                    crop_frame(frame, (0.0, 0.0, 0.5, 1.0)), sort_output, engine
+                )
+                text = "\n".join(t for t in (right_text, left_text) if t)
+                page_number = right_page if right_page is not None else left_page
             else:
-                logger.warning("Unknown OCR engine: %s", engine)
+                text, page_number = self._run_single_ocr(frame, sort_output, engine)
+            Clock.schedule_once(lambda dt: self._apply_ocr_result(text, page_number))
         finally:
             Clock.schedule_once(lambda dt: setattr(self.ocr_button, "disabled", False))
 
-    def _run_yomitoku_ocr(self, frame: np.ndarray, sort_output: bool) -> None:
+    def _run_single_ocr(
+        self, frame: np.ndarray, sort_output: bool, engine: str
+    ) -> tuple[str, int | None]:
+        if engine == OCR_ENGINE_GOOGLE_VISION:
+            return self._run_google_vision_ocr(frame)
+        elif engine == OCR_ENGINE_YOMITOKU:
+            return self._run_yomitoku_ocr(frame, sort_output)
+        logger.warning("Unknown OCR engine: %s", engine)
+        return "", None
+
+    def _run_yomitoku_ocr(
+        self, frame: np.ndarray, sort_output: bool
+    ) -> tuple[str, int | None]:
         img = bgr_frame_to_rgb_array(frame)
         analyzed, _ocr_vis, _layout_vis = self.analyzer(img)
         print(analyzed.model_dump_json(), flush=True)
         text = extract_recognized_text(analyzed, sort=sort_output)
         image_height, image_width = img.shape[:2]
         page_number = extract_page_number(analyzed, image_width, image_height)
-        Clock.schedule_once(lambda dt: self._apply_ocr_result(text, page_number))
+        return text, page_number
 
-    def _run_google_vision_ocr(self, frame: np.ndarray) -> None:
+    def _run_google_vision_ocr(self, frame: np.ndarray) -> tuple[str, int | None]:
         api_key = google_vision.get_api_key()
         if api_key is None:
             logger.warning(
@@ -410,7 +458,7 @@ class OcrApp(App):
                 "Google Cloud Vision",
                 f"環境変数 {google_vision.API_KEY_ENV_VAR} が設定されていません",
             )
-            return
+            return "", None
 
         image_bytes = encode_frame_as_png(frame)
         try:
@@ -420,13 +468,13 @@ class OcrApp(App):
             send_notification(
                 "Google Cloud Vision", f"リクエストに失敗しました: {error}"
             )
-            return
+            return "", None
 
         print(json.dumps(response), flush=True)
         text = google_vision.extract_recognized_text(response)
         height, width = frame.shape[:2]
         page_number = google_vision.extract_page_number(response, width, height)
-        Clock.schedule_once(lambda dt: self._apply_ocr_result(text, page_number))
+        return text, page_number
 
     def _apply_ocr_result(self, text: str, page_number: int | None) -> None:
         self.result_text_input.text = text
@@ -461,6 +509,7 @@ class OcrApp(App):
                 "flip": self.flip_checkbox.active,
                 "raw_order": self.raw_order_checkbox.active,
                 "save_to_fixed_directory": self.save_to_fixed_directory_checkbox.active,
+                "spread": self.spread_checkbox.active,
                 "save_directory": str(self.save_directory),
                 "ocr_engine": self._selected_engine(),
             },

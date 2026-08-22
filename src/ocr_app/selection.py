@@ -29,6 +29,24 @@ def touch_to_image_fraction(
     return fx, fy
 
 
+def spread_guide_line_points(
+    widget_x: float,
+    widget_y: float,
+    widget_width: float,
+    widget_height: float,
+    image_width: float,
+    image_height: float,
+) -> tuple[float, float, float, float]:
+    """見開き分割の目安線(画像の水平中央を通る縦線)の両端座標を返す。
+
+    画像はウィジェット内に中央揃えで表示されるため、水平中央はレターボックスの
+    有無に関わらずウィジェットの中央と一致する。戻り値は(x1, y1, x2, y2)。
+    """
+    image_y = widget_y + (widget_height - image_height) / 2
+    center_x = widget_x + widget_width / 2
+    return center_x, image_y, center_x, image_y + image_height
+
+
 def normalize_box(
     x1: float, y1: float, x2: float, y2: float
 ) -> tuple[float, float, float, float]:

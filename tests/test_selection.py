@@ -1,4 +1,8 @@
-from ocr_app.selection import normalize_box, touch_to_image_fraction
+from ocr_app.selection import (
+    normalize_box,
+    spread_guide_line_points,
+    touch_to_image_fraction,
+)
 
 
 def test_touch_to_image_fraction_top_left_of_image_is_origin() -> None:
@@ -74,3 +78,33 @@ def test_normalize_box_clamps_to_unit_range() -> None:
     result = normalize_box(x1=-0.5, y1=-0.5, x2=1.5, y2=1.5)
 
     assert result == (0.0, 0.0, 1.0, 1.0)
+
+
+def test_spread_guide_line_points_is_vertical_line_at_widget_horizontal_center() -> (
+    None
+):
+    # widget: 100x50、画像は幅いっぱい(100)だが高さは40(上下に5pxずつレターボックス)。
+    # 画像は中央揃えのため、水平中央はレターボックスの有無に関わらずwidgetの中央と一致する。
+    result = spread_guide_line_points(
+        widget_x=0,
+        widget_y=0,
+        widget_width=100,
+        widget_height=50,
+        image_width=100,
+        image_height=40,
+    )
+
+    assert result == (50, 5, 50, 45)
+
+
+def test_spread_guide_line_points_offsets_with_widget_position() -> None:
+    result = spread_guide_line_points(
+        widget_x=10,
+        widget_y=20,
+        widget_width=100,
+        widget_height=50,
+        image_width=100,
+        image_height=40,
+    )
+
+    assert result == (60, 25, 60, 65)
