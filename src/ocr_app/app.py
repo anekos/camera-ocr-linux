@@ -24,6 +24,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.spinner import Spinner
 from kivy.uix.splitter import Splitter
 from kivy.uix.textinput import TextInput
+from kivy.uix.widget import Widget
 from yomitoku import DocumentAnalyzer
 
 from ocr_app.camera import (
@@ -209,7 +210,10 @@ class OcrApp(App):
             font_size=FONT_SIZE,
             size_hint_x=None,
             width=RESOLUTION_LABEL_WIDTH,
+            halign="right",
+            valign="middle",
         )
+        self.resolution_label.bind(size=self.resolution_label.setter("text_size"))
 
         self.page_number_label = Label(
             text="",
@@ -217,7 +221,10 @@ class OcrApp(App):
             font_size=FONT_SIZE,
             size_hint_x=None,
             width=PAGE_NUMBER_LABEL_WIDTH,
+            halign="right",
+            valign="middle",
         )
+        self.page_number_label.bind(size=self.page_number_label.setter("text_size"))
 
         toggle_row = BoxLayout(
             orientation="horizontal",
@@ -234,6 +241,7 @@ class OcrApp(App):
         toggle_row.add_widget(self.save_to_fixed_directory_checkbox)
         toggle_row.add_widget(save_to_fixed_directory_label)
         toggle_row.add_widget(self.engine_spinner)
+        toggle_row.add_widget(Widget())  # 残り幅を埋めて、以降を右寄せにするスペーサー
         toggle_row.add_widget(self.page_number_label)
         toggle_row.add_widget(self.resolution_label)
 
