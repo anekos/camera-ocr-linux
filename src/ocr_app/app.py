@@ -343,7 +343,8 @@ class OcrApp(App):
         self.analyzer: DocumentAnalyzer | None = None
         self._update_ocr_button_state()
         threading.Thread(target=self._load_yomitoku_analyzer, daemon=True).start()
-        threading.Thread(target=self._capture_loop, daemon=True).start()
+        self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self._capture_thread.start()
         Clock.schedule_interval(self._update, 1.0 / TARGET_FPS)
         return layout
 
@@ -774,5 +775,10 @@ class OcrApp(App):
 
     def on_stop(self) -> None:
         self._capture_running = False
+        # キャプチャスレッドが self.camera に触れなくなるまで待ってから release する。
+        # 待たずに release すると、スレッドがまだ読み取り/再接続の途中でカメラの
+        # capture オブジェクトへ同時アクセスすることになり、デバイスが正常に
+        # 閉じられずカメラが使用不能になることがある。
+        self._capture_thread.join()
         if self.camera is not None:
             self.camera.release()
