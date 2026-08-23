@@ -27,6 +27,7 @@ from kivy.uix.splitter import Splitter
 from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
 from yomitoku import DocumentAnalyzer
+from yomitoku.document_analyzer import DocumentAnalyzerSchema
 
 from ocr_app.camera import (
     Camera,
@@ -98,6 +99,7 @@ class OcrApp(App):
     selection_box: tuple[float, float, float, float] | None = None
     _selection_start: tuple[float, float] | None = None
     current_page_number: int | None = None
+    last_yomitoku_analyzed: list[DocumentAnalyzerSchema] | None = None
 
     def _build_labeled_checkbox(
         self, text: str, active: bool
@@ -197,6 +199,7 @@ class OcrApp(App):
             self.spread_checkbox,
         ):
             checkbox.bind(active=lambda instance, value: self._save_settings())
+        self.raw_order_checkbox.bind(active=self._on_raw_order_toggled)
 
         saved_engine = settings.get("ocr_engine")
         if saved_engine not in OCR_ENGINE_LABELS:
@@ -500,35 +503,44 @@ class OcrApp(App):
                 # 見開き2ページを一度にOCRさせると、yomitokuが段をページを
                 # またいで誤って結び付けてしまうため、右半分・左半分を
                 # 別々にOCRしてから連結する(縦書きの綴じ方向を前提に右→左)。
-                right_text, right_page = self._run_single_ocr(
+                right_text, right_page, right_analyzed = self._run_single_ocr(
                     crop_frame(frame, (0.5, 0.0, 1.0, 1.0)), sort_output, engine
                 )
-                left_text, left_page = self._run_single_ocr(
+                left_text, left_page, left_analyzed = self._run_single_ocr(
                     crop_frame(frame, (0.0, 0.0, 0.5, 1.0)), sort_output, engine
                 )
                 # ページ内の段落区切りは"\n"のため、ページの境目は空行("\n\n")
                 # にして区別できるようにする。
                 text = "\n\n".join(t for t in (right_text, left_text) if t)
                 page_number = right_page if right_page is not None else left_page
+                analyzed_list = [
+                    a for a in (right_analyzed, left_analyzed) if a is not None
+                ] or None
             else:
-                text, page_number = self._run_single_ocr(frame, sort_output, engine)
-            Clock.schedule_once(lambda dt: self._apply_ocr_result(text, page_number))
+                text, page_number, analyzed = self._run_single_ocr(
+                    frame, sort_output, engine
+                )
+                analyzed_list = [analyzed] if analyzed is not None else None
+            Clock.schedule_once(
+                lambda dt: self._apply_ocr_result(text, page_number, analyzed_list)
+            )
         finally:
             Clock.schedule_once(lambda dt: self._update_ocr_button_state())
 
     def _run_single_ocr(
         self, frame: np.ndarray, sort_output: bool, engine: str
-    ) -> tuple[str, int | None]:
+    ) -> tuple[str, int | None, DocumentAnalyzerSchema | None]:
         if engine == OCR_ENGINE_GOOGLE_VISION:
-            return self._run_google_vision_ocr(frame)
+            text, page_number = self._run_google_vision_ocr(frame)
+            return text, page_number, None
         elif engine == OCR_ENGINE_YOMITOKU:
             return self._run_yomitoku_ocr(frame, sort_output)
         logger.warning("Unknown OCR engine: %s", engine)
-        return "", None
+        return "", None, None
 
     def _run_yomitoku_ocr(
         self, frame: np.ndarray, sort_output: bool
-    ) -> tuple[str, int | None]:
+    ) -> tuple[str, int | None, DocumentAnalyzerSchema]:
         assert self.analyzer is not None, "yomitoku analyzer is not loaded yet"
         img = bgr_frame_to_rgb_array(frame)
         analyzed, _ocr_vis, _layout_vis = self.analyzer(img)
@@ -536,7 +548,7 @@ class OcrApp(App):
         text = extract_recognized_text(analyzed, sort=sort_output)
         image_height, image_width = img.shape[:2]
         page_number = extract_page_number(analyzed, image_width, image_height)
-        return text, page_number
+        return text, page_number, analyzed
 
     def _run_google_vision_ocr(self, frame: np.ndarray) -> tuple[str, int | None]:
         api_key = google_vision.get_api_key()
@@ -567,15 +579,31 @@ class OcrApp(App):
         page_number = google_vision.extract_page_number(response, width, height)
         return text, page_number
 
-    def _apply_ocr_result(self, text: str, page_number: int | None) -> None:
+    def _apply_ocr_result(
+        self,
+        text: str,
+        page_number: int | None,
+        analyzed_list: list[DocumentAnalyzerSchema] | None,
+    ) -> None:
         self.result_text_input.text = text
         self.current_page_number = page_number
+        self.last_yomitoku_analyzed = analyzed_list
         self.page_number_label.text = (
             f"ページ: {page_number}" if page_number is not None else ""
         )
         if self.copy_checkbox.active:
             Clipboard.copy(text)
         send_notification("OCR完了", f"{len(text)}文字を認識しました")
+
+    def _on_raw_order_toggled(self, instance: CheckBox, value: bool) -> None:
+        if not self.last_yomitoku_analyzed:
+            return
+        sort_output = not value
+        texts = [
+            extract_recognized_text(analyzed, sort=sort_output)
+            for analyzed in self.last_yomitoku_analyzed
+        ]
+        self.result_text_input.text = "\n\n".join(t for t in texts if t)
 
     def _on_save_button_press(self, instance: Button) -> None:
         if self.last_frame is None:
