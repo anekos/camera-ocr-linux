@@ -1,13 +1,13 @@
 # ocr-app
 
-USBカメラの映像をリアルタイムに表示し、ボタン一つでOCR（[yomitoku](https://github.com/kotaro-kinoshita/yomitoku)、またはGoogle Cloud Vision）にかけられるLinux向けデスクトップアプリ。
+USBカメラの映像をリアルタイムに表示し、ボタン一つでOCR（[yomitoku](https://github.com/kotaro-kinoshita/yomitoku)、Google Cloud Vision、またはOpenAI）にかけられるLinux向けデスクトップアプリ。
 
 ## 機能
 
 - USBカメラ（`/dev/video0`固定）の映像をリアルタイムプレビュー表示（MJPG・3840x2160@30fpsでキャプチャ）
 - プレビュー上をドラッグすると範囲選択でき、OCR・画像保存は選択範囲のみを対象にする（クリックだけなら選択解除）
 - 「反転」チェックボックスで、カメラの取り付け向きに合わせて上下左右反転
-- OCRエンジンをSpinnerで選択（yomitoku / Google Cloud Vision）
+- OCRエンジンをSpinnerで選択（yomitoku / Google Cloud Vision / OpenAI: gpt-5 / OpenAI: gpt-5-mini / OpenAI: gpt-4o）
 - 「OCR実行」ボタンで、その時点のプレビュー画像（選択範囲があればそれ）に対してOCRを実行
   - OCRはバックグラウンドスレッドで実行するため、実行中もプレビューは止まらない
   - 解析結果全体（JSON）はstdoutに出力
@@ -16,6 +16,7 @@ USBカメラの映像をリアルタイムに表示し、ボタン一つでOCR�
   - ページ番号らしき数値が見つかれば、画面下部のステータス行に表示
     - yomitoku: page_header/page_footerロールの段落から、画像中心から最も遠い（＝外側の）候補を採用
     - Google Cloud Vision: 数字のみのtextAnnotationを候補にし、同様に画像中心から最も遠いものを採用（role分類が無いための代替ロジック。本文中の数字を誤検出する可能性あり）
+    - OpenAI: 本文とページ番号をまとめてモデルに判定させ、構造化出力(JSON)として1回のAPI呼び出しで取得
   - 「見開き(右→左)」チェックボックスがONの場合、見開き2ページを画像の左右半分に分割してそれぞれ個別にOCRし、右半分→左半分の順にテキストを連結する（yomitokuは見開き全体を一度にOCRすると段の並びがページをまたいで乱れるため）。プレビューには分割位置の目安としてシアン色の縦ガイド線を表示。ページ境界は空行で区切り、ページ内の段落改行と区別できるようにしている
 - テキストエリアの文字はドラッグで選択可能。選択を終えると自動でクリップボードにコピーする。コピーされる内容は引用形式 `` `連結したテキスト` P.<ページ番号> ``（改行は連結して1行にし、ページ番号が無ければ` P.`部分は省略）
 - 「クリップボードコピー」チェックボックスがONの場合、OCR結果全体も自動でクリップボードにコピー
@@ -28,6 +29,29 @@ USBカメラの映像をリアルタイムに表示し、ボタン一つでOCR�
 ## 環境変数
 
 - `OCR_APP_GOOGLE_API_KEY` — Google Cloud VisionをOCRエンジンとして使う場合のAPIキー。未設定の場合はGoogle Cloud Vision実行時にデスクトップ通知でエラーを表示する（yomitokuのみを使う場合は不要）
+- `OCR_APP_OPEN_AI_API_KEY` — OpenAIをOCRエンジンとして使う場合のAPIキー。未設定の場合はOpenAI実行時にデスクトップ通知でエラーを表示する
+
+## OpenAI APIの料金
+
+[公式料金ページ](https://platform.openai.com/docs/pricing)のStandard価格（2026-08-23時点、変更される可能性あり）。1画像1回のOCR呼び出しあたりのトークン数は画像サイズ・本文の分量により変動する。
+
+| モデル | 入力（USD / 1M tokens） | 出力（USD / 1M tokens） |
+| --- | --- | --- |
+| gpt-5 | $1.25 | $10.00 |
+| gpt-5-mini | $0.25 | $2.00 |
+| gpt-4o | $2.50 | $10.00 |
+
+### 4K画像(3840x2160、本アプリのキャプチャ解像度)1回あたりの概算
+
+画像の入力トークン数はモデルによってトークン化方式が異なる（gpt-5/gpt-4oは512pxタイル分割、gpt-5-miniは32pxパッチ分割）。出力トークンは本文の分量次第だが、日本語書籍1ページ相当（数百字）で1,000トークン程度と仮定した場合の概算。
+
+| モデル | 画像の入力トークン | 1回あたりコスト(USD) | 概算(円、$1=150円) |
+| --- | --- | --- | --- |
+| gpt-5 | 約910 | 約$0.011 | 約1.7円 |
+| gpt-5-mini | 約2,352 | 約$0.0026 | 約0.4円 |
+| gpt-4o | 約1,105 | 約$0.013 | 約2円 |
+
+「見開き(右→左)」チェックボックスON時は左右2回OCRを呼ぶため、この表の単純に2倍のコストになる。
 
 ## 必要環境
 
@@ -70,3 +94,4 @@ make setup   # 依存関係の同期 + pre-commitフックの導入
 - `src/ocr_app/formatting.py` — テキストエリア選択時のコピー内容（引用形式）の整形
 - `src/ocr_app/ocr/yomitoku.py` — yomitokuの解析結果からの本文抽出・ページ番号抽出
 - `src/ocr_app/ocr/google_vision.py` — Google Cloud Vision APIクライアント、本文抽出・ページ番号抽出
+- `src/ocr_app/ocr/openai.py` — OpenAI Chat Completions APIクライアント、本文抽出・ページ番号抽出

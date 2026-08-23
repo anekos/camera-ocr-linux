@@ -42,6 +42,7 @@ from ocr_app.camera import (
 from ocr_app.formatting import format_selection_as_quote
 from ocr_app.notifications import send_notification
 from ocr_app.ocr import google_vision
+from ocr_app.ocr import openai as openai_ocr
 from ocr_app.ocr.yomitoku import extract_page_number, extract_recognized_text
 from ocr_app.selection import (
     normalize_box,
@@ -83,9 +84,12 @@ ENGINE_SPINNER_WIDTH = 260
 # 他のOCR API(GCV以外)を足すときはここに追加すればよい。
 OCR_ENGINE_YOMITOKU = "yomitoku"
 OCR_ENGINE_GOOGLE_VISION = "google_vision"
+OPENAI_ENGINE_PREFIX = "openai:"
+OPENAI_MODELS = ["gpt-5", "gpt-5-mini", "gpt-4o"]
 OCR_ENGINE_LABELS = {
     OCR_ENGINE_YOMITOKU: "yomitoku",
     OCR_ENGINE_GOOGLE_VISION: "Google Cloud Vision",
+    **{f"{OPENAI_ENGINE_PREFIX}{model}": f"OpenAI: {model}" for model in OPENAI_MODELS},
 }
 DEFAULT_OCR_ENGINE = OCR_ENGINE_YOMITOKU
 
@@ -535,6 +539,10 @@ class OcrApp(App):
             return text, page_number, None
         elif engine == OCR_ENGINE_YOMITOKU:
             return self._run_yomitoku_ocr(frame, sort_output)
+        elif engine.startswith(OPENAI_ENGINE_PREFIX):
+            model = engine.removeprefix(OPENAI_ENGINE_PREFIX)
+            text, page_number = self._run_openai_ocr(frame, model)
+            return text, page_number, None
         logger.warning("Unknown OCR engine: %s", engine)
         return "", None, None
 
@@ -577,6 +585,30 @@ class OcrApp(App):
         text = google_vision.extract_recognized_text(response)
         height, width = frame.shape[:2]
         page_number = google_vision.extract_page_number(response, width, height)
+        return text, page_number
+
+    def _run_openai_ocr(self, frame: np.ndarray, model: str) -> tuple[str, int | None]:
+        api_key = openai_ocr.get_api_key()
+        if api_key is None:
+            logger.warning(
+                "%s is not set; skipping OpenAI OCR", openai_ocr.API_KEY_ENV_VAR
+            )
+            send_notification(
+                "OpenAI", f"環境変数 {openai_ocr.API_KEY_ENV_VAR} が設定されていません"
+            )
+            return "", None
+
+        image_bytes = encode_frame_as_png(frame)
+        try:
+            response = openai_ocr.analyze(image_bytes, api_key, model)
+        except httpx.HTTPError as error:
+            logger.warning("OpenAI API request failed: %s", error)
+            send_notification("OpenAI", f"リクエストに失敗しました: {error}")
+            return "", None
+
+        print(json.dumps(response), flush=True)
+        text = openai_ocr.extract_recognized_text(response)
+        page_number = openai_ocr.extract_page_number(response)
         return text, page_number
 
     def _apply_ocr_result(
