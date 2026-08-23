@@ -153,9 +153,7 @@ class OcrApp(App):
 
         self.result_text_input.bind(minimum_height=_fit_result_text_height)
         result_scroll.bind(height=_fit_result_text_height)
-        self.result_text_input.bind(
-            selection_text=self._on_result_selection_text_changed
-        )
+        self.result_text_input.bind(on_touch_up=self._on_result_text_touch_up)
 
         settings = load_settings(SETTINGS_PATH)
 
@@ -610,11 +608,14 @@ class OcrApp(App):
             },
         )
 
-    def _on_result_selection_text_changed(
-        self, instance: TextInput, value: str
-    ) -> None:
-        if value:
-            Clipboard.copy(format_selection_as_quote(value, self.current_page_number))
+    def _on_result_text_touch_up(self, instance: TextInput, touch: MotionEvent) -> bool:
+        if instance.selection_text:
+            Clipboard.copy(
+                format_selection_as_quote(
+                    instance.selection_text, self.current_page_number
+                )
+            )
+        return False
 
     def on_stop(self) -> None:
         self._capture_running = False
