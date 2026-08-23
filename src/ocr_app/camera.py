@@ -70,21 +70,45 @@ class Camera:
         width: int = DEFAULT_CAPTURE_WIDTH,
         height: int = DEFAULT_CAPTURE_HEIGHT,
     ) -> None:
-        self._capture = cv2.VideoCapture(device_index)
-        if not self._capture.isOpened():
+        self._device_index = device_index
+        self._width = width
+        self._height = height
+
+        capture = self._open_capture()
+        if capture is None:
             raise RuntimeError(f"Failed to open camera device index {device_index}")
+        self._capture = capture
+
+    def _open_capture(self) -> cv2.VideoCapture | None:
+        capture = cv2.VideoCapture(self._device_index)
+        if not capture.isOpened():
+            capture.release()
+            return None
 
         # MJPGを指定しないとUVCカメラは低解像度のYUYVにフォールバックしやすいため、
         # 高解像度キャプチャにはFOURCCの指定が必要。
-        self._capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc(*"MJPG"))
-        self._capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        self._capture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc(*"MJPG"))
+        capture.set(cv2.CAP_PROP_FRAME_WIDTH, self._width)
+        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self._height)
+        return capture
 
     def read_frame(self) -> np.ndarray | None:
-        ok, frame = self._capture.read()
+        try:
+            ok, frame = self._capture.read()
+        except cv2.error:
+            return None
         if not ok:
             return None
         return frame
+
+    def reconnect(self) -> bool:
+        """カメラを閉じて再オープンを試みる。切断からの復帰用。成功したらTrue。"""
+        self._capture.release()
+        capture = self._open_capture()
+        if capture is None:
+            return False
+        self._capture = capture
+        return True
 
     def release(self) -> None:
         self._capture.release()

@@ -147,9 +147,11 @@ class _FakeVideoCapture:
         self,
         opened: bool = True,
         read_result: tuple[bool, np.ndarray | None] = (True, None),
+        raise_on_read: Exception | None = None,
     ) -> None:
         self._opened = opened
         self._read_result = read_result
+        self._raise_on_read = raise_on_read
         self.released = False
         self.set_calls: list[tuple[int, float]] = []
 
@@ -157,6 +159,8 @@ class _FakeVideoCapture:
         return self._opened
 
     def read(self) -> tuple[bool, np.ndarray | None]:
+        if self._raise_on_read is not None:
+            raise self._raise_on_read
         return self._read_result
 
     def release(self) -> None:
@@ -241,3 +245,63 @@ def test_camera_context_manager_releases_capture(
         pass
 
     assert fake.released is True
+
+
+def test_camera_read_frame_returns_none_when_read_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ocr_app.camera import Camera
+
+    fake = _FakeVideoCapture(opened=True, raise_on_read=cv2.error("device gone"))
+    monkeypatch.setattr("ocr_app.camera.cv2.VideoCapture", lambda index: fake)
+
+    camera = Camera(device_index=0)
+
+    assert camera.read_frame() is None
+
+
+def test_camera_reconnect_releases_old_capture_and_reopens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ocr_app.camera import Camera
+
+    created: list[_FakeVideoCapture] = []
+
+    def _create(_index: int) -> _FakeVideoCapture:
+        fake = _FakeVideoCapture(opened=True)
+        created.append(fake)
+        return fake
+
+    monkeypatch.setattr("ocr_app.camera.cv2.VideoCapture", _create)
+
+    camera = Camera(device_index=0, width=3840, height=2160)
+    old_fake = created[0]
+
+    result = camera.reconnect()
+
+    assert result is True
+    assert old_fake.released is True
+    assert len(created) == 2
+    new_fake = created[1]
+    assert new_fake.set_calls == [
+        (cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc(*"MJPG")),
+        (cv2.CAP_PROP_FRAME_WIDTH, 3840),
+        (cv2.CAP_PROP_FRAME_HEIGHT, 2160),
+    ]
+
+
+def test_camera_reconnect_returns_false_when_device_still_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ocr_app.camera import Camera
+
+    opened_flags = [True, False]
+
+    monkeypatch.setattr(
+        "ocr_app.camera.cv2.VideoCapture",
+        lambda index: _FakeVideoCapture(opened=opened_flags.pop(0)),
+    )
+
+    camera = Camera(device_index=0)
+
+    assert camera.reconnect() is False
