@@ -69,6 +69,7 @@ RESULT_TEXT_MAX_HEIGHT = 600
 RESOLUTION_LABEL_WIDTH = 120
 PAGE_NUMBER_LABEL_WIDTH = 120
 FPS_LABEL_WIDTH = 120
+OCR_DURATION_LABEL_WIDTH = 120
 FONT_SIZE = 24
 SCROLLBAR_WIDTH = 12
 # Kivyのデフォルト(20sp)はホイール1ノッチでの移動量が小さすぎるため広げる。
@@ -265,6 +266,17 @@ class OcrApp(App):
         )
         self.page_number_label.bind(size=self.page_number_label.setter("text_size"))
 
+        self.ocr_duration_label = Label(
+            text="",
+            font_name=JAPANESE_FONT_PATH,
+            font_size=FONT_SIZE,
+            size_hint_x=None,
+            width=OCR_DURATION_LABEL_WIDTH,
+            halign="right",
+            valign="middle",
+        )
+        self.ocr_duration_label.bind(size=self.ocr_duration_label.setter("text_size"))
+
         toggle_row = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
@@ -300,6 +312,7 @@ class OcrApp(App):
         )
         status_row.add_widget(Widget())  # 残り幅を埋めて、以降を右寄せにするスペーサー
         status_row.add_widget(self.page_number_label)
+        status_row.add_widget(self.ocr_duration_label)
         status_row.add_widget(self.fps_label)
         status_row.add_widget(self.resolution_label)
 
@@ -502,6 +515,7 @@ class OcrApp(App):
     def _run_ocr(
         self, frame: np.ndarray, sort_output: bool, engine: str, spread: bool
     ) -> None:
+        start_time = time.perf_counter()
         try:
             if spread:
                 # 見開き2ページを一度にOCRさせると、yomitokuが段をページを
@@ -525,8 +539,11 @@ class OcrApp(App):
                     frame, sort_output, engine
                 )
                 analyzed_list = [analyzed] if analyzed is not None else None
+            duration = time.perf_counter() - start_time
             Clock.schedule_once(
-                lambda dt: self._apply_ocr_result(text, page_number, analyzed_list)
+                lambda dt: self._apply_ocr_result(
+                    text, page_number, analyzed_list, duration
+                )
             )
         finally:
             Clock.schedule_once(lambda dt: self._update_ocr_button_state())
@@ -616,6 +633,7 @@ class OcrApp(App):
         text: str,
         page_number: int | None,
         analyzed_list: list[DocumentAnalyzerSchema] | None,
+        duration: float,
     ) -> None:
         self.result_text_input.text = text
         self.current_page_number = page_number
@@ -623,6 +641,7 @@ class OcrApp(App):
         self.page_number_label.text = (
             f"ページ: {page_number}" if page_number is not None else ""
         )
+        self.ocr_duration_label.text = f"{duration:.1f}秒"
         if self.copy_checkbox.active:
             Clipboard.copy(text)
         send_notification("OCR完了", f"{len(text)}文字を認識しました")
