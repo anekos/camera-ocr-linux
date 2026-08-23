@@ -209,7 +209,7 @@ class OcrApp(App):
             size_hint_x=None,
             width=ENGINE_SPINNER_WIDTH,
         )
-        self.engine_spinner.bind(text=lambda instance, value: self._save_settings())
+        self.engine_spinner.bind(text=self._on_engine_spinner_text)
 
         # 保存先ディレクトリが設定ファイルに無かった場合の補完値を含め、
         # 起動時点の設定を正規の形で書き戻しておく。
@@ -292,9 +292,20 @@ class OcrApp(App):
         layout.add_widget(status_row)
 
         self.camera = Camera(device_index=CAMERA_DEVICE_INDEX)
-        self.analyzer = DocumentAnalyzer(device="cuda")
+        self.analyzer: DocumentAnalyzer | None = None
+        self._update_ocr_button_state()
+        threading.Thread(target=self._load_yomitoku_analyzer, daemon=True).start()
         Clock.schedule_interval(self._update, 1.0 / TARGET_FPS)
         return layout
+
+    def _load_yomitoku_analyzer(self) -> None:
+        analyzer = DocumentAnalyzer(device="cuda")
+
+        def _on_loaded(dt: float) -> None:
+            self.analyzer = analyzer
+            self._update_ocr_button_state()
+
+        Clock.schedule_once(_on_loaded)
 
     def _touch_to_fraction(self, x: float, y: float) -> tuple[float, float] | None:
         widget = self.image_widget
@@ -372,6 +383,17 @@ class OcrApp(App):
                 return engine_id
         return DEFAULT_OCR_ENGINE
 
+    def _on_engine_spinner_text(self, instance: Spinner, value: str) -> None:
+        self._save_settings()
+        self._update_ocr_button_state()
+
+    def _update_ocr_button_state(self) -> None:
+        yomitoku_not_ready = (
+            self._selected_engine() == OCR_ENGINE_YOMITOKU and self.analyzer is None
+        )
+        self.ocr_button.disabled = yomitoku_not_ready
+        self.ocr_button.text = "yomitoku読込中..." if yomitoku_not_ready else "OCR実行"
+
     def _update(self, dt: float) -> None:
         frame = self.camera.read_frame()
         if frame is None:
@@ -445,7 +467,7 @@ class OcrApp(App):
                 text, page_number = self._run_single_ocr(frame, sort_output, engine)
             Clock.schedule_once(lambda dt: self._apply_ocr_result(text, page_number))
         finally:
-            Clock.schedule_once(lambda dt: setattr(self.ocr_button, "disabled", False))
+            Clock.schedule_once(lambda dt: self._update_ocr_button_state())
 
     def _run_single_ocr(
         self, frame: np.ndarray, sort_output: bool, engine: str
@@ -460,6 +482,7 @@ class OcrApp(App):
     def _run_yomitoku_ocr(
         self, frame: np.ndarray, sort_output: bool
     ) -> tuple[str, int | None]:
+        assert self.analyzer is not None, "yomitoku analyzer is not loaded yet"
         img = bgr_frame_to_rgb_array(frame)
         analyzed, _ocr_vis, _layout_vis = self.analyzer(img)
         print(analyzed.model_dump_json(), flush=True)
