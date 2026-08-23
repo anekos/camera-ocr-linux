@@ -2,6 +2,7 @@ import json
 import logging
 import tempfile
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -65,6 +66,7 @@ RESULT_TEXT_MIN_HEIGHT = 60
 RESULT_TEXT_MAX_HEIGHT = 600
 RESOLUTION_LABEL_WIDTH = 120
 PAGE_NUMBER_LABEL_WIDTH = 120
+FPS_LABEL_WIDTH = 90
 FONT_SIZE = 24
 SCROLLBAR_WIDTH = 12
 # Kivyのデフォルト(20sp)はホイール1ノッチでの移動量が小さすぎるため広げる。
@@ -236,6 +238,17 @@ class OcrApp(App):
         )
         self.resolution_label.bind(size=self.resolution_label.setter("text_size"))
 
+        self.fps_label = Label(
+            text="",
+            font_name=JAPANESE_FONT_PATH,
+            font_size=FONT_SIZE,
+            size_hint_x=None,
+            width=FPS_LABEL_WIDTH,
+            halign="right",
+            valign="middle",
+        )
+        self.fps_label.bind(size=self.fps_label.setter("text_size"))
+
         self.page_number_label = Label(
             text="",
             font_name=JAPANESE_FONT_PATH,
@@ -282,6 +295,7 @@ class OcrApp(App):
         )
         status_row.add_widget(Widget())  # 残り幅を埋めて、以降を右寄せにするスペーサー
         status_row.add_widget(self.page_number_label)
+        status_row.add_widget(self.fps_label)
         status_row.add_widget(self.resolution_label)
 
         layout = BoxLayout(orientation="vertical")
@@ -292,9 +306,14 @@ class OcrApp(App):
         layout.add_widget(status_row)
 
         self.camera = Camera(device_index=CAMERA_DEVICE_INDEX)
+        self.fps_smoothed: float | None = None
+        self._capture_lock = threading.Lock()
+        self._latest_captured_frame: np.ndarray | None = None
+        self._capture_running = True
         self.analyzer: DocumentAnalyzer | None = None
         self._update_ocr_button_state()
         threading.Thread(target=self._load_yomitoku_analyzer, daemon=True).start()
+        threading.Thread(target=self._capture_loop, daemon=True).start()
         Clock.schedule_interval(self._update, 1.0 / TARGET_FPS)
         return layout
 
@@ -306,6 +325,32 @@ class OcrApp(App):
             self._update_ocr_button_state()
 
         Clock.schedule_once(_on_loaded)
+
+    def _capture_loop(self) -> None:
+        """UIの描画レート(TARGET_FPS)に律速されない、カメラの実キャプチャループ。
+
+        `cv2.VideoCapture.read()` はカメラから次のフレームが届くまでブロックするため、
+        ここで律速せずに回し続けることで、UIの描画キャップとは独立にカメラ自体の
+        実効FPSを計測できる。
+        """
+        last_time = time.perf_counter()
+        while self._capture_running:
+            frame = self.camera.read_frame()
+            if frame is None:
+                continue
+
+            now = time.perf_counter()
+            elapsed, last_time = now - last_time, now
+            current_fps = 1.0 / elapsed if elapsed > 0 else None
+
+            with self._capture_lock:
+                self._latest_captured_frame = frame
+                if current_fps is not None:
+                    self.fps_smoothed = (
+                        current_fps
+                        if self.fps_smoothed is None
+                        else self.fps_smoothed * 0.9 + current_fps * 0.1
+                    )
 
     def _touch_to_fraction(self, x: float, y: float) -> tuple[float, float] | None:
         widget = self.image_widget
@@ -395,7 +440,9 @@ class OcrApp(App):
         self.ocr_button.text = "yomitoku読込中..." if yomitoku_not_ready else "OCR実行"
 
     def _update(self, dt: float) -> None:
-        frame = self.camera.read_frame()
+        with self._capture_lock:
+            frame = self._latest_captured_frame
+            fps = self.fps_smoothed
         if frame is None:
             logger.warning("Failed to read frame from camera; keeping last frame")
             return
@@ -408,6 +455,8 @@ class OcrApp(App):
 
         height, width = frame.shape[:2]
         self.resolution_label.text = f"{width}x{height}"
+        if fps is not None:
+            self.fps_label.text = f"{fps:.1f} FPS"
 
         texture = Texture.create(size=(width, height), colorfmt="rgb")
         texture.blit_buffer(
@@ -568,4 +617,5 @@ class OcrApp(App):
             Clipboard.copy(format_selection_as_quote(value, self.current_page_number))
 
     def on_stop(self) -> None:
+        self._capture_running = False
         self.camera.release()
