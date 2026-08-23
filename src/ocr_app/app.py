@@ -385,6 +385,7 @@ class OcrApp(App):
     def _wait_for_camera_reconnect(self) -> None:
         """カメラが切断されたとみなせるとき、終了せずに再接続できるまで待機する。"""
         logger.warning("Camera appears disconnected; waiting for reconnection")
+        send_notification("カメラ切断", "カメラが切断されました。再接続を待機します")
         with self._capture_lock:
             self._camera_connected = False
         while self._capture_running and not self.camera.reconnect():
