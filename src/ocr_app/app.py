@@ -173,18 +173,18 @@ class OcrApp(App):
             settings, AppPaths.get_paths("ocr-app", "anekos").user_data
         )
         self.copy_checkbox, copy_label = self._build_labeled_checkbox(
-            "クリップボードにコピー",
+            "クリップボードコピー",
             active=get_bool(settings, "copy_to_clipboard", True),
         )
         self.flip_checkbox, flip_label = self._build_labeled_checkbox(
             "反転", active=get_bool(settings, "flip", False)
         )
         self.raw_order_checkbox, raw_order_label = self._build_labeled_checkbox(
-            "そのまま出力", active=get_bool(settings, "raw_order", False)
+            "元の順で出力", active=get_bool(settings, "raw_order", False)
         )
         self.save_to_fixed_directory_checkbox, save_to_fixed_directory_label = (
             self._build_labeled_checkbox(
-                "固定ディレクトリに保存",
+                "指定保存先",
                 active=get_bool(settings, "save_to_fixed_directory", False),
             )
         )
