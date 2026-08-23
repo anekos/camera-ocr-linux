@@ -64,6 +64,8 @@ CAMERA_DEVICE_INDEX = 0
 # 連続してフレーム取得に失敗した回数がこれを超えたら、切断とみなして再接続を試みる。
 CAMERA_READ_FAILURE_LIMIT = 5
 CAMERA_RECONNECT_INTERVAL_SEC = 1.0
+CAMERA_STATUS_TEXT_WAITING = "待機中"
+CAMERA_STATUS_TEXT_DISCONNECTED = "切断中"
 CONTROL_ROW_HEIGHT = 60
 CONTROL_ROW_SPACING = 10
 RESULT_TEXT_HEIGHT = 150
@@ -326,12 +328,18 @@ class OcrApp(App):
         layout.add_widget(button_row)
         layout.add_widget(status_row)
 
-        self.camera = Camera(device_index=CAMERA_DEVICE_INDEX)
+        try:
+            self.camera: Camera | None = Camera(device_index=CAMERA_DEVICE_INDEX)
+        except RuntimeError as error:
+            logger.warning("Camera not available at startup: %s", error)
+            self.camera = None
         self.fps_smoothed: float | None = None
         self._capture_lock = threading.Lock()
         self._latest_captured_frame: np.ndarray | None = None
         self._capture_running = True
-        self._camera_connected = True
+        self._camera_status_text: str | None = (
+            None if self.camera is not None else CAMERA_STATUS_TEXT_WAITING
+        )
         self.analyzer: DocumentAnalyzer | None = None
         self._update_ocr_button_state()
         threading.Thread(target=self._load_yomitoku_analyzer, daemon=True).start()
@@ -358,6 +366,12 @@ class OcrApp(App):
         last_time = time.perf_counter()
         consecutive_failures = 0
         while self._capture_running:
+            if self.camera is None:
+                self._wait_for_camera_reconnect()
+                consecutive_failures = 0
+                last_time = time.perf_counter()
+                continue
+
             frame = self.camera.read_frame()
             if frame is None:
                 consecutive_failures += 1
@@ -374,7 +388,7 @@ class OcrApp(App):
 
             with self._capture_lock:
                 self._latest_captured_frame = frame
-                self._camera_connected = True
+                self._camera_status_text = None
                 if current_fps is not None:
                     self.fps_smoothed = (
                         current_fps
@@ -383,16 +397,44 @@ class OcrApp(App):
                     )
 
     def _wait_for_camera_reconnect(self) -> None:
-        """カメラが切断されたとみなせるとき、終了せずに再接続できるまで待機する。"""
-        logger.warning("Camera appears disconnected; waiting for reconnection")
-        send_notification("カメラ切断", "カメラが切断されました。再接続を待機します")
+        """カメラが利用できない間、終了せずに接続(または再接続)できるまで待機する。"""
+        first_connect = self.camera is None
+        if first_connect:
+            logger.warning("Camera not available; waiting for it to appear")
+            send_notification(
+                "カメラ待機中", "カメラが見つかりません。接続をお待ちしています"
+            )
+        else:
+            logger.warning("Camera appears disconnected; waiting for reconnection")
+            send_notification(
+                "カメラ切断", "カメラが切断されました。再接続を待機します"
+            )
+
         with self._capture_lock:
-            self._camera_connected = False
-        while self._capture_running and not self.camera.reconnect():
+            self._camera_status_text = (
+                CAMERA_STATUS_TEXT_WAITING
+                if first_connect
+                else CAMERA_STATUS_TEXT_DISCONNECTED
+            )
+
+        while self._capture_running:
+            if self.camera is None:
+                try:
+                    self.camera = Camera(device_index=CAMERA_DEVICE_INDEX)
+                except RuntimeError:
+                    pass
+                else:
+                    break
+            elif self.camera.reconnect():
+                break
             time.sleep(CAMERA_RECONNECT_INTERVAL_SEC)
+
         if self._capture_running:
-            logger.info("Camera reconnected")
-            send_notification("カメラ再接続", "カメラが再接続されました")
+            logger.info("Camera connected")
+            if first_connect:
+                send_notification("カメラ接続", "カメラが接続されました")
+            else:
+                send_notification("カメラ再接続", "カメラが再接続されました")
 
     def _touch_to_fraction(self, x: float, y: float) -> tuple[float, float] | None:
         widget = self.image_widget
@@ -485,16 +527,18 @@ class OcrApp(App):
         with self._capture_lock:
             frame = self._latest_captured_frame
             fps = self.fps_smoothed
-            connected = self._camera_connected
-        if frame is None:
-            logger.warning("Failed to read frame from camera; keeping last frame")
+            status_text = self._camera_status_text
+
+        if status_text is not None:
+            # 直前のフレームがあればプレビューに残したまま、状態表示だけを切り替える。
+            # 解像度・FPS表示を毎フレーム上書きし続けると、この表示がすぐ隠れてしまうため
+            # 早期リターンする(未接続時はそもそもフレームが無いのでこれで問題ない)。
+            self.resolution_label.text = status_text
+            self.fps_label.text = ""
             return
 
-        if not connected:
-            # 直前のフレームをプレビューに残したまま、切断中であることだけを表示する。
-            # 解像度・FPS表示を毎フレーム上書きし続けると、この表示がすぐ隠れてしまうため。
-            self.resolution_label.text = "切断中"
-            self.fps_label.text = ""
+        if frame is None:
+            logger.warning("Failed to read frame from camera; keeping last frame")
             return
 
         if self.flip_checkbox.active:
@@ -730,4 +774,5 @@ class OcrApp(App):
 
     def on_stop(self) -> None:
         self._capture_running = False
-        self.camera.release()
+        if self.camera is not None:
+            self.camera.release()
