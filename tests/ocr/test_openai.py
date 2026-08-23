@@ -47,6 +47,10 @@ def test_prompt_instructs_not_to_skip_multi_column_layouts() -> None:
     assert "段" in PROMPT
 
 
+def test_prompt_instructs_not_to_include_meta_commentary() -> None:
+    assert "断り書き" in PROMPT
+
+
 def test_build_request_body_requests_structured_json_output() -> None:
     body = build_request_body(b"fake-png-bytes", "gpt-4o")
 
