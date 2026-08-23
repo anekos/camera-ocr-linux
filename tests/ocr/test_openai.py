@@ -6,6 +6,7 @@ import pytest
 
 from ocr_app.ocr.openai import (
     API_KEY_ENV_VAR,
+    PROMPT,
     analyze,
     build_request_body,
     extract_page_number,
@@ -38,8 +39,12 @@ def test_build_request_body_embeds_model_and_base64_image_data_url() -> None:
     content = body["messages"][0]["content"]
     image_parts = [part for part in content if part["type"] == "image_url"]
     assert image_parts == [
-        {"type": "image_url", "image_url": {"url": expected_data_url}}
+        {"type": "image_url", "image_url": {"url": expected_data_url, "detail": "high"}}
     ]
+
+
+def test_prompt_instructs_not_to_skip_multi_column_layouts() -> None:
+    assert "段" in PROMPT
 
 
 def test_build_request_body_requests_structured_json_output() -> None:

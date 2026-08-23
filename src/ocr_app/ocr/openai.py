@@ -9,8 +9,12 @@ CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 REQUEST_TIMEOUT = 60.0
 
 PROMPT = (
-    "この画像に写っている本文をそのまま書き起こしてください。"
+    "この画像に写っている本文を一字一句省略・要約せずそのまま書き起こしてください。"
     "改行や段落構成はできるだけ元の見た目に合わせてください。"
+    "ページが2段組・3段組など複数の段に分かれている場合は、"
+    "存在するすべての段を読み取ってください。1段目だけを読んで"
+    "終わらせず、2段目以降に文字が無いか必ず確認し、あれば続けて"
+    "書き起こしてください。"
     "ページヘッダー・フッターの余白にページ番号らしき数字があれば、"
     "本文には含めずpage_numberとして分離してください。"
     "見つからない場合はpage_numberをnullにしてください。"
@@ -53,7 +57,10 @@ def build_request_body(image_bytes: bytes, model: str) -> dict:
                 "role": "user",
                 "content": [
                     {"type": "text", "text": PROMPT},
-                    {"type": "image_url", "image_url": {"url": data_url}},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data_url, "detail": "high"},
+                    },
                 ],
             }
         ],
