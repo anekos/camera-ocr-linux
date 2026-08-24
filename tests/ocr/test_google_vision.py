@@ -95,6 +95,24 @@ def test_extract_page_number_returns_none_when_no_digit_annotations() -> None:
     assert extract_page_number(response, 100, 100) is None
 
 
+def test_extract_page_number_ignores_non_decimal_digit_annotation() -> None:
+    # "①"はstr.isdigit()ではTrueになるがint()には変換できないため、
+    # 候補から除外されずにクラッシュする不具合があった。
+    response = {
+        "responses": [
+            {
+                "textAnnotations": [
+                    _annotation("本文 ①", 0, 0, 100, 100),
+                    _annotation("本文", 10, 10, 50, 50),
+                    _annotation("①", 90, 90, 100, 100),
+                ]
+            }
+        ]
+    }
+
+    assert extract_page_number(response, 1000, 1000) is None
+
+
 def test_extract_page_number_finds_digit_annotation() -> None:
     response = {
         "responses": [

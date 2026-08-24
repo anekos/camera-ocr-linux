@@ -87,7 +87,7 @@ def extract_page_number(
     candidates: list[tuple[float, int]] = []
     for annotation in responses[0].get("textAnnotations", [])[1:]:
         text = annotation.get("description", "").strip()
-        if not text.isdigit():
+        if not text.isdecimal():
             continue
         center = _annotation_center(annotation)
         if center is None:
