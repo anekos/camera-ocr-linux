@@ -603,6 +603,12 @@ class OcrApp(App):
                     text, page_number, analyzed_list, duration
                 )
             )
+        except Exception:
+            logger.exception("OCR processing failed")
+            send_notification(
+                "OCR失敗",
+                "予期しないエラーが発生しました。詳細はログを確認してください。",
+            )
         finally:
             Clock.schedule_once(lambda dt: self._update_ocr_button_state())
 
