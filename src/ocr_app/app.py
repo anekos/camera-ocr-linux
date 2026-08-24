@@ -71,10 +71,6 @@ CONTROL_ROW_SPACING = 10
 RESULT_TEXT_HEIGHT = 150
 RESULT_TEXT_MIN_HEIGHT = 60
 RESULT_TEXT_MAX_HEIGHT = 600
-RESOLUTION_LABEL_WIDTH = 120
-PAGE_NUMBER_LABEL_WIDTH = 120
-FPS_LABEL_WIDTH = 120
-OCR_DURATION_LABEL_WIDTH = 120
 FONT_SIZE = 24
 SCROLLBAR_WIDTH = 12
 # Kivyのデフォルト(20sp)はホイール1ノッチでの移動量が小さすぎるため広げる。
@@ -110,6 +106,29 @@ class OcrApp(App):
     _selection_start: tuple[float, float] | None = None
     current_page_number: int | None = None
     last_yomitoku_analyzed: list[DocumentAnalyzerSchema] | None = None
+
+    def _build_status_label(self) -> Label:
+        """ステータス行用のラベルを作る。
+
+        固定幅+text_sizeで折り返す方式は、内容によって2行になってしまう
+        (例: FPS表示が90px幅に収まらず折り返される)ため使わない。
+        代わりにtexture_sizeに合わせてwidthを追従させ、常に1行で
+        表示されるようにする。
+        """
+        label = Label(
+            text="",
+            font_name=JAPANESE_FONT_PATH,
+            font_size=FONT_SIZE,
+            size_hint_x=None,
+            valign="middle",
+        )
+        label.bind(
+            texture_size=lambda instance, value: setattr(instance, "width", value[0])
+        )
+        label.bind(
+            height=lambda instance, value: setattr(instance, "text_size", (None, value))
+        )
+        return label
 
     def _build_labeled_checkbox(
         self, text: str, active: bool
@@ -238,49 +257,11 @@ class OcrApp(App):
         )
         self.save_button.bind(on_press=self._on_save_button_press)
 
-        self.resolution_label = Label(
-            text="",
-            font_name=JAPANESE_FONT_PATH,
-            font_size=FONT_SIZE,
-            size_hint_x=None,
-            width=RESOLUTION_LABEL_WIDTH,
-            halign="right",
-            valign="middle",
-        )
-        self.resolution_label.bind(size=self.resolution_label.setter("text_size"))
-
-        self.fps_label = Label(
-            text="",
-            font_name=JAPANESE_FONT_PATH,
-            font_size=FONT_SIZE,
-            size_hint_x=None,
-            width=FPS_LABEL_WIDTH,
-            halign="right",
-            valign="middle",
-        )
-        self.fps_label.bind(size=self.fps_label.setter("text_size"))
-
-        self.page_number_label = Label(
-            text="",
-            font_name=JAPANESE_FONT_PATH,
-            font_size=FONT_SIZE,
-            size_hint_x=None,
-            width=PAGE_NUMBER_LABEL_WIDTH,
-            halign="right",
-            valign="middle",
-        )
-        self.page_number_label.bind(size=self.page_number_label.setter("text_size"))
-
-        self.ocr_duration_label = Label(
-            text="",
-            font_name=JAPANESE_FONT_PATH,
-            font_size=FONT_SIZE,
-            size_hint_x=None,
-            width=OCR_DURATION_LABEL_WIDTH,
-            halign="right",
-            valign="middle",
-        )
-        self.ocr_duration_label.bind(size=self.ocr_duration_label.setter("text_size"))
+        self.ocr_status_label = self._build_status_label()
+        self.ocr_status_label.text = "OCR: --"
+        self.status_separator_label = self._build_status_label()
+        self.status_separator_label.text = "|"
+        self.camera_status_label = self._build_status_label()
 
         toggle_row = BoxLayout(
             orientation="horizontal",
@@ -314,12 +295,12 @@ class OcrApp(App):
             size_hint_y=None,
             height=CONTROL_ROW_HEIGHT,
             spacing=CONTROL_ROW_SPACING,
+            padding=[CONTROL_ROW_SPACING, 0],
         )
         status_row.add_widget(Widget())  # 残り幅を埋めて、以降を右寄せにするスペーサー
-        status_row.add_widget(self.page_number_label)
-        status_row.add_widget(self.ocr_duration_label)
-        status_row.add_widget(self.fps_label)
-        status_row.add_widget(self.resolution_label)
+        status_row.add_widget(self.ocr_status_label)
+        status_row.add_widget(self.status_separator_label)
+        status_row.add_widget(self.camera_status_label)
 
         layout = BoxLayout(orientation="vertical")
         layout.add_widget(self.image_widget)
@@ -534,8 +515,7 @@ class OcrApp(App):
             # 直前のフレームがあればプレビューに残したまま、状態表示だけを切り替える。
             # 解像度・FPS表示を毎フレーム上書きし続けると、この表示がすぐ隠れてしまうため
             # 早期リターンする(未接続時はそもそもフレームが無いのでこれで問題ない)。
-            self.resolution_label.text = status_text
-            self.fps_label.text = ""
+            self.camera_status_label.text = f"カメラ: {status_text}"
             return
 
         if frame is None:
@@ -549,9 +529,10 @@ class OcrApp(App):
         self.last_frame = frame
 
         height, width = frame.shape[:2]
-        self.resolution_label.text = f"{width}x{height}"
+        camera_text = f"カメラ: {width}x{height}"
         if fps is not None:
-            self.fps_label.text = f"{fps:.1f} FPS"
+            camera_text += f" {fps:.1f}fps"
+        self.camera_status_label.text = camera_text
 
         texture = Texture.create(size=(width, height), colorfmt="rgb")
         texture.blit_buffer(
@@ -715,13 +696,17 @@ class OcrApp(App):
         self.result_text_input.text = text
         self.current_page_number = page_number
         self.last_yomitoku_analyzed = analyzed_list
-        self.page_number_label.text = (
-            f"ページ: {page_number}" if page_number is not None else ""
-        )
-        self.ocr_duration_label.text = f"{duration:.1f}秒"
+        self._update_ocr_status_label(duration)
         if self.copy_checkbox.active:
             Clipboard.copy(text)
         send_notification("OCR完了", f"{len(text)}文字を認識しました")
+
+    def _update_ocr_status_label(self, duration: float) -> None:
+        parts = []
+        if self.current_page_number is not None:
+            parts.append(f"P.{self.current_page_number}")
+        parts.append(f"{duration:.1f}秒")
+        self.ocr_status_label.text = f"OCR: {' '.join(parts)}"
 
     def _on_raw_order_toggled(self, instance: CheckBox, value: bool) -> None:
         if not self.last_yomitoku_analyzed:
