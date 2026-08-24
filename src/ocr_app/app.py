@@ -105,6 +105,7 @@ class OcrApp(App):
     selection_box: tuple[float, float, float, float] | None = None
     _selection_start: tuple[float, float] | None = None
     current_page_number: int | None = None
+    current_ocr_duration: float | None = None
     last_yomitoku_analyzed: list[DocumentAnalyzerSchema] | None = None
 
     def _build_status_label(self) -> Label:
@@ -701,17 +702,21 @@ class OcrApp(App):
     ) -> None:
         self.result_text_input.text = text
         self.current_page_number = page_number
+        self.current_ocr_duration = duration
         self.last_yomitoku_analyzed = analyzed_list
-        self._update_ocr_status_label(duration)
+        self._update_ocr_status_label()
         if self.copy_checkbox.active:
             Clipboard.copy(text)
         send_notification("OCR完了", f"{len(text)}文字を認識しました")
 
-    def _update_ocr_status_label(self, duration: float) -> None:
+    def _update_ocr_status_label(self) -> None:
+        if self.current_ocr_duration is None:
+            return
         parts = []
         if self.current_page_number is not None:
             parts.append(f"P.{self.current_page_number}")
-        parts.append(f"{duration:.1f}秒")
+        parts.append(f"{len(self.result_text_input.text):,}文字")
+        parts.append(f"{self.current_ocr_duration:.1f}秒")
         self.ocr_status_label.text = f"OCR: {' '.join(parts)}"
 
     def _on_raw_order_toggled(self, instance: CheckBox, value: bool) -> None:
@@ -723,6 +728,7 @@ class OcrApp(App):
             for analyzed in self.last_yomitoku_analyzed
         ]
         self.result_text_input.text = "\n\n".join(t for t in texts if t)
+        self._update_ocr_status_label()
 
     def _on_save_button_press(self, instance: Button) -> None:
         if self.last_frame is None:
