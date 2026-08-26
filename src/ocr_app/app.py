@@ -29,6 +29,7 @@ from kivy.uix.widget import Widget
 from yomitoku import DocumentAnalyzer
 from yomitoku.document_analyzer import DocumentAnalyzerSchema
 
+from ocr_app.barcode import detect_barcode
 from ocr_app.camera import (
     Camera,
     bgr_frame_to_rgb_array,
@@ -61,7 +62,7 @@ from ocr_app.settings import (
 logger = logging.getLogger(__name__)
 
 TARGET_FPS = 30
-QR_SCAN_INTERVAL_SEC = 0.3
+CODE_SCAN_INTERVAL_SEC = 0.3
 CAMERA_DEVICE_INDEX = 0
 # 連続してフレーム取得に失敗した回数がこれを超えたら、切断とみなして再接続を試みる。
 CAMERA_READ_FAILURE_LIMIT = 5
@@ -330,7 +331,7 @@ class OcrApp(App):
         self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
         self._capture_thread.start()
         Clock.schedule_interval(self._update, 1.0 / TARGET_FPS)
-        Clock.schedule_interval(self._scan_qr_code, QR_SCAN_INTERVAL_SEC)
+        Clock.schedule_interval(self._scan_codes, CODE_SCAN_INTERVAL_SEC)
         return layout
 
     def _load_yomitoku_analyzer(self) -> None:
@@ -547,11 +548,11 @@ class OcrApp(App):
         self.image_widget.texture = texture
         self._update_spread_guide_line()
 
-    def _scan_qr_code(self, dt: float) -> None:
+    def _scan_codes(self, dt: float) -> None:
         if self.last_frame is None:
             return
         frame = self._crop_if_selected(self.last_frame)
-        text = detect_qr_code(frame)
+        text = detect_qr_code(frame) or detect_barcode(frame)
         if text is None or text == self.result_text_input.text:
             return
         self.result_text_input.text = text
@@ -560,7 +561,7 @@ class OcrApp(App):
         self._update_ocr_status_label()
         if self.copy_checkbox.active:
             Clipboard.copy(text)
-        send_notification("QRコード検出", text)
+        send_notification("コード検出", text)
 
     def _update_spread_guide_line(self) -> None:
         if not self.spread_checkbox.active:
