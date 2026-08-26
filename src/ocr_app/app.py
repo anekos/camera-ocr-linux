@@ -44,6 +44,7 @@ from ocr_app.notifications import send_notification
 from ocr_app.ocr import google_vision
 from ocr_app.ocr import openai as openai_ocr
 from ocr_app.ocr.yomitoku import extract_page_number, extract_recognized_text
+from ocr_app.qr import detect_qr_code
 from ocr_app.selection import (
     normalize_box,
     spread_guide_line_points,
@@ -60,6 +61,7 @@ from ocr_app.settings import (
 logger = logging.getLogger(__name__)
 
 TARGET_FPS = 30
+QR_SCAN_INTERVAL_SEC = 0.3
 CAMERA_DEVICE_INDEX = 0
 # 連続してフレーム取得に失敗した回数がこれを超えたら、切断とみなして再接続を試みる。
 CAMERA_READ_FAILURE_LIMIT = 5
@@ -328,6 +330,7 @@ class OcrApp(App):
         self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
         self._capture_thread.start()
         Clock.schedule_interval(self._update, 1.0 / TARGET_FPS)
+        Clock.schedule_interval(self._scan_qr_code, QR_SCAN_INTERVAL_SEC)
         return layout
 
     def _load_yomitoku_analyzer(self) -> None:
@@ -544,6 +547,21 @@ class OcrApp(App):
         self.image_widget.texture = texture
         self._update_spread_guide_line()
 
+    def _scan_qr_code(self, dt: float) -> None:
+        if self.last_frame is None:
+            return
+        frame = self._crop_if_selected(self.last_frame)
+        text = detect_qr_code(frame)
+        if text is None or text == self.result_text_input.text:
+            return
+        self.result_text_input.text = text
+        self.current_page_number = None
+        self.current_ocr_duration = None
+        self._update_ocr_status_label()
+        if self.copy_checkbox.active:
+            Clipboard.copy(text)
+        send_notification("QRコード検出", text)
+
     def _update_spread_guide_line(self) -> None:
         if not self.spread_checkbox.active:
             self.spread_guide_line.points = []
@@ -711,6 +729,7 @@ class OcrApp(App):
 
     def _update_ocr_status_label(self) -> None:
         if self.current_ocr_duration is None:
+            self.ocr_status_label.text = "OCR: --"
             return
         parts = []
         if self.current_page_number is not None:
